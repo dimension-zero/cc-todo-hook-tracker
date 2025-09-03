@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
@@ -112,8 +113,14 @@ async function getRealProjectPath(sessionId: string): Promise<string | null> {
         }
         
         // Fallback: try to guess from the flattened directory name
-        // This won't work perfectly for paths with hyphens
-        return guessPathFromFlattenedName(projDir);
+        const reconstructedPath = guessPathFromFlattenedName(projDir);
+        // Validate the path exists before returning
+        if (reconstructedPath && validatePath(reconstructedPath)) {
+          return reconstructedPath;
+        } else {
+          console.error(`Failed to reconstruct valid path from: ${projDir}`);
+          return null;
+        }
       }
     }
   } catch (error) {
@@ -126,56 +133,115 @@ async function getRealProjectPath(sessionId: string): Promise<string | null> {
 // Validate if a path exists on the filesystem
 function validatePath(testPath: string): boolean {
   try {
-    return require('fs').existsSync(testPath);
+    return fsSync.existsSync(testPath);
   } catch {
     return false;
   }
 }
 
-// Build path incrementally and validate each step
-function buildAndValidatePath(parts: string[], isWindows: boolean): string | null {
+// List directory contents to find matching entries
+function listDirectory(dirPath: string): string[] {
+  try {
+    return fsSync.readdirSync(dirPath);
+  } catch (error) {
+    console.log(`Error listing ${dirPath}: ${error}`);
+    return [];
+  }
+}
+
+// Build path incrementally with greedy matching against actual filesystem
+function buildAndValidatePath(flatParts: string[], isWindows: boolean): string | null {
   const pathSep = isWindows ? '\\' : '/';
-  let currentPath = isWindows ? `${parts[0]}:` : '';
+  let currentPath = isWindows ? `${flatParts[0]}:\\` : '/';
+  let consumedParts = isWindows ? 1 : 0;
   
-  for (let i = isWindows ? 1 : 0; i < parts.length; i++) {
-    const part = parts[i];
+  console.log(`Starting path reconstruction with parts: [${flatParts.join(', ')}]`);
+  
+  while (consumedParts < flatParts.length) {
+    const remainingParts = flatParts.slice(consumedParts);
+    console.log(`Current path: ${currentPath}`);
+    console.log(`Remaining parts: [${remainingParts.join(', ')}]`);
     
-    // Special handling for Users directory - next part might be a dotted username
-    if (isWindows && i === 1 && parts[1] === 'Users' && i + 2 < parts.length) {
-      // Try combining next two parts with a dot as username (e.g., first.last)
-      const possibleUsername = `${parts[i + 1]}.${parts[i + 2]}`;
-      const userPath = currentPath + pathSep + 'Users' + pathSep + possibleUsername;
-      
-      if (validatePath(userPath)) {
-        currentPath = userPath;
-        console.log(`✓ Valid username path: ${userPath}`);
-        // Skip the next two parts as we've consumed them
-        i += 2;
-        continue;
-      }
+    // List what's actually in the current directory
+    const dirContents = listDirectory(currentPath);
+    console.log(`Directory contents: [${dirContents.slice(0, 10).join(', ')}${dirContents.length > 10 ? '...' : ''}]`);
+    
+    if (dirContents.length === 0) {
+      console.log(`Cannot list directory ${currentPath}, stopping`);
+      break;
     }
     
-    const testPath = currentPath + pathSep + part;
+    // Try to find the best match for the remaining parts
+    let bestMatch = null;
+    let bestMatchLength = 0;
     
-    // Check if this path segment exists
-    if (validatePath(testPath)) {
-      currentPath = testPath;
-      console.log(`✓ Valid path segment: ${testPath}`);
-    } else {
-      // Try with a dot prefix if the segment doesn't exist
-      const dotPath = currentPath + pathSep + '.' + part;
-      if (validatePath(dotPath)) {
-        currentPath = dotPath;
-        console.log(`✓ Valid path segment (with dot): ${dotPath}`);
-        parts[i] = '.' + part; // Update the part for final path
-      } else {
-        console.log(`✗ Invalid path segment: ${testPath} (also tried ${dotPath})`);
-        // Continue anyway - might be a new directory
-        currentPath = testPath;
+    // Try increasingly longer combinations of the remaining parts
+    for (let numParts = Math.min(remainingParts.length, 5); numParts >= 1; numParts--) {
+      const testParts = remainingParts.slice(0, numParts);
+      
+      // Build possible directory names from these parts
+      const candidates = [];
+      
+      // Try as-is (parts joined with hyphens)
+      candidates.push(testParts.join('-'));
+      
+      // Try with dots between parts (for usernames like first.last)
+      if (numParts === 2) {
+        candidates.push(testParts.join('.'));
       }
+      
+      // Try with dot prefix (hidden directories)
+      if (numParts === 1) {
+        candidates.push('.' + testParts[0]);
+      }
+      
+      // Check each candidate against actual directory contents
+      for (const candidate of candidates) {
+        // Look for exact match
+        if (dirContents.includes(candidate)) {
+          console.log(`Found exact match: "${candidate}" (consuming ${numParts} parts)`);
+          bestMatch = candidate;
+          bestMatchLength = numParts;
+          break;
+        }
+        
+        // Also check for directories that start with our candidate
+        // This handles cases where the flattened name is abbreviated
+        for (const dirEntry of dirContents) {
+          if (dirEntry.toLowerCase().startsWith(candidate.toLowerCase())) {
+            console.log(`Found prefix match: "${dirEntry}" starts with "${candidate}" (consuming ${numParts} parts)`);
+            bestMatch = dirEntry;
+            bestMatchLength = numParts;
+            break;
+          }
+        }
+        
+        if (bestMatch) break;
+      }
+      
+      if (bestMatch) break;
+    }
+    
+    if (bestMatch) {
+      // Found a match, add it to the path
+      currentPath = currentPath + bestMatch;
+      consumedParts += bestMatchLength;
+      console.log(`✓ Added "${bestMatch}" to path, new path: ${currentPath}`);
+    } else {
+      // No match found, try adding the part as-is (might be a new directory)
+      const part = remainingParts[0];
+      currentPath = currentPath + part;
+      consumedParts += 1;
+      console.log(`✗ No match found for "${part}", adding as-is`);
+    }
+    
+    // Add path separator for next iteration unless we're done
+    if (consumedParts < flatParts.length) {
+      currentPath = currentPath + pathSep;
     }
   }
   
+  console.log(`Final reconstructed path: ${currentPath}`);
   return currentPath;
 }
 
@@ -184,7 +250,9 @@ function guessPathFromFlattenedName(flatPath: string): string {
   const isWindows = process.platform === 'win32';
   const pathSep = isWindows ? '\\' : '/';
   
-  console.log(`Guessing path from flattened name: ${flatPath}`);
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`Reconstructing path from: ${flatPath}`);
+  console.log('='.repeat(60));
   
   // First check if we have metadata for this project
   try {
@@ -193,106 +261,61 @@ function guessPathFromFlattenedName(flatPath: string): string {
       const metadata = require('fs').readFileSync(metadataPath, 'utf-8');
       const data = JSON.parse(metadata);
       if (data.path) {
-        console.log(`Found metadata path: ${data.path}`);
+        console.log(`✓ Found cached metadata: ${data.path}`);
         return data.path;
       }
     }
   } catch (error) {
-    // No metadata, continue with guessing
+    // No metadata, continue with reconstruction
   }
   
-  // Windows path with drive letter (e.g., C--Users-john-smith-Source-repos-my-project)
+  // Windows path with drive letter (e.g., C--Users-mathew-burkitt-Source-repos-DT-cc-todo-hook-tracker)
   const windowsMatch = flatPath.match(/^([A-Z])--(.+)$/);
   if (windowsMatch) {
     const [, driveLetter, restOfPath] = windowsMatch;
     
-    // Simple split on single dash first
-    let pathParts = restOfPath.split('-');
+    console.log(`Drive letter: ${driveLetter}`);
+    console.log(`Rest of path: ${restOfPath}`);
+    
+    // Split on single dashes, but preserve empty parts (which indicate dots)
+    const rawParts = restOfPath.split('-');
     
     // Process parts to handle double dashes (empty parts mean next part should have dot)
-    let processedParts = [];
-    for (let i = 0; i < pathParts.length; i++) {
-      if (pathParts[i] === '' && i + 1 < pathParts.length) {
-        // Empty part means next part should have a dot prefix
-        processedParts.push('.' + pathParts[i + 1]);
+    let flatParts = [];
+    for (let i = 0; i < rawParts.length; i++) {
+      if (rawParts[i] === '' && i + 1 < rawParts.length) {
+        // Empty part from double dash - next part should have dot prefix
+        flatParts.push('.' + rawParts[i + 1]);
         i++; // Skip the next part as we've consumed it
-      } else if (pathParts[i] !== '') {
-        processedParts.push(pathParts[i]);
+      } else if (rawParts[i] !== '') {
+        flatParts.push(rawParts[i]);
       }
     }
     
-    // Build path with validation
-    const allParts = [driveLetter, ...processedParts];
+    console.log(`Flattened parts: [${flatParts.join(', ')}]`);
+    
+    // Build path with greedy filesystem validation
+    const allParts = [driveLetter, ...flatParts];
     const validatedPath = buildAndValidatePath(allParts, true);
     
-    if (validatedPath) {
-      console.log(`Validated path: ${validatedPath}`);
+    if (validatedPath && validatePath(validatedPath)) {
+      console.log(`✓ Successfully validated: ${validatedPath}`);
       return validatedPath;
+    } else {
+      console.log(`✗ Could not validate path, returning best guess: ${validatedPath || flatPath}`);
+      return validatedPath || flatPath;
     }
-    
-    // If validation didn't work perfectly, try more complex reconstruction
-    // Handle double dashes which represent dots in directory names
-    const processedPath = restOfPath.replace(/--/g, '|DOT|');
-    pathParts = processedPath.split('-');
-    
-    // Restore dots for parts that had double dashes
-    pathParts = pathParts.map(part => part.replace(/\|DOT\|/g, '.'));
-    
-    // Try validation again with dot-processed parts
-    const dotProcessedParts = [driveLetter, ...pathParts];
-    const dotValidatedPath = buildAndValidatePath(dotProcessedParts, true);
-    
-    if (dotValidatedPath) {
-      console.log(`Validated path (with dot processing): ${dotValidatedPath}`);
-      return dotValidatedPath;
-    }
-    
-    // Fall back to heuristic reconstruction if validation fails
-    let reconstructed = [];
-    let i = 0;
-    while (i < pathParts.length) {
-      const part = pathParts[i];
-      
-      // Check if this looks like it might be part of a username (e.g., first-last)
-      // But skip if it contains a dot (already processed)
-      if (i === 1 && pathParts[0] === 'Users' && i + 1 < pathParts.length && !part.includes('.')) {
-        // Check if next part looks like it could be a last name
-        const nextPart = pathParts[i + 1];
-        if (nextPart && /^[a-z]+$/i.test(part) && /^[a-z]+$/i.test(nextPart) && !nextPart.includes('.')) {
-          // Likely a firstname.lastname pattern
-          reconstructed.push(`${part}.${nextPart}`);
-          i += 2;
-          continue;
-        }
-      }
-      
-      // Check for known hyphenated directory names by looking for patterns
-      // If we see common path segments followed by something with hyphens
-      if (part === 'DT' && i + 1 < pathParts.length) {
-        // The next parts might be a hyphenated project name
-        // Collect all remaining parts as they might form the project name
-        const remainingParts = pathParts.slice(i + 1);
-        reconstructed.push(part);
-        reconstructed.push(remainingParts.join('-'));
-        break;
-      }
-      
-      reconstructed.push(part);
-      i++;
-    }
-    
-    const converted = `${driveLetter}:${pathSep}${reconstructed.join(pathSep)}`;
-    console.log(`Fallback conversion: ${converted}`);
-    return converted;
   }
   
   // Unix absolute path
   if (flatPath.startsWith('-')) {
-    return '/' + flatPath.slice(1).replace(/-/g, '/');
+    const unixParts = flatPath.slice(1).split('-');
+    const validatedPath = buildAndValidatePath(unixParts, false);
+    return validatedPath || ('/' + flatPath.slice(1).replace(/-/g, '/'));
   }
   
   // Return as-is if we can't figure it out
-  console.log(`Could not convert, returning as-is: ${flatPath}`);
+  console.log(`✗ Unknown path format: ${flatPath}`);
   return flatPath;
 }
 
@@ -309,6 +332,36 @@ async function saveProjectMetadata(flattenedPath: string, realPath: string): Pro
 // Load all todos data
 async function loadTodosData(): Promise<Project[]> {
   const projects = new Map<string, Project>();
+  const logPath = path.join(process.cwd(), 'project.load.log');
+  const logEntries: string[] = [];
+  const timestamp = new Date().toISOString();
+  
+  logEntries.push(`=== Project Load Log - ${timestamp} ===`);
+  logEntries.push(`Working Directory: ${process.cwd()}`);
+  logEntries.push(`Projects Directory: ${projectsDir}`);
+  logEntries.push('');
+  
+  // First, validate all project directories can be reconstructed
+  try {
+    const projectDirsList = await fs.readdir(projectsDir);
+    logEntries.push(`Found ${projectDirsList.length} flattened project directories:`);
+    logEntries.push('');
+    
+    for (const flatDir of projectDirsList) {
+      const reconstructed = guessPathFromFlattenedName(flatDir);
+      const exists = validatePath(reconstructed);
+      if (exists) {
+        logEntries.push(`\u2713 ${flatDir} -> ${reconstructed}`);
+      } else {
+        logEntries.push(`\u2717 ${flatDir} -> ${reconstructed} [DOES NOT EXIST]`);
+      }
+    }
+    logEntries.push('');
+    logEntries.push('--- Session Processing ---');
+    logEntries.push('');
+  } catch (error) {
+    logEntries.push(`Error scanning project directories: ${error}`);
+  }
   
   try {
     // Read all todo files
@@ -359,8 +412,9 @@ async function loadTodosData(): Promise<Project[]> {
         // If we didn't find it in the file, try the project directories
         if (projectPath === 'Unknown Project') {
           const realPath = await getRealProjectPath(fullSessionId);
-          if (realPath) {
+          if (realPath && realPath !== 'Unknown Project') {
             projectPath = realPath;
+            logEntries.push(`✓ SUCCESS: Session ${sessionId} -> ${realPath}`);
             // Save metadata for future use if we found the path
             const projDirs = await fs.readdir(projectsDir);
             for (const dir of projDirs) {
@@ -371,6 +425,7 @@ async function loadTodosData(): Promise<Project[]> {
             }
           } else {
             projectPath = 'Unknown Project';
+            logEntries.push(`✗ FAILED: Session ${sessionId} -> Could not reconstruct path`);
           }
         }
         
@@ -450,6 +505,20 @@ async function loadTodosData(): Promise<Project[]> {
     
   } catch (error) {
     console.error('Error loading todos:', error);
+  }
+  
+  // Write log file
+  try {
+    logEntries.push('');
+    logEntries.push(`=== Summary ===`);
+    logEntries.push(`Total projects: ${projects.size}`);
+    logEntries.push(`Successful reconstructions: ${logEntries.filter(l => l.includes('✓ SUCCESS')).length}`);
+    logEntries.push(`Failed reconstructions: ${logEntries.filter(l => l.includes('✗ FAILED')).length}`);
+    
+    await fs.writeFile(logPath, logEntries.join('\n'), 'utf-8');
+    console.log(`Project load log written to: ${logPath}`);
+  } catch (error) {
+    console.error('Failed to write project load log:', error);
   }
   
   return Array.from(projects.values());
