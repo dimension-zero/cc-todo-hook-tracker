@@ -61,6 +61,7 @@ function App() {
   const [sortMethod, setSortMethod] = useState<SortMethod>(1); // recent
   const [paddingMode, setPaddingMode] = useState<PaddingMode>(2); // none
   const [filterMode, setFilterMode] = useState<FilterMode>('all'); // show all
+  const [showEmptyProjects, setShowEmptyProjects] = useState(false); // hide empty projects by default
   
   // Edit state management
   const [editedTodos, setEditedTodos] = useState<Todo[] | null>(null);
@@ -566,7 +567,12 @@ function App() {
     };
   };
 
-  const sortedProjects = [...projects].sort((a, b) => {
+  // Filter projects based on showEmptyProjects setting
+  const filteredProjects = showEmptyProjects 
+    ? projects 
+    : projects.filter(p => p.sessions.some(s => s.todos.length > 0));
+  
+  const sortedProjects = [...filteredProjects].sort((a, b) => {
     switch(sortMethod) {
       case 0: // alphabetic
         return a.path.localeCompare(b.path);
@@ -624,18 +630,30 @@ function App() {
       {/* Sidebar with projects */}
       <div className="sidebar" style={{ width: leftPaneWidth }}>
         <div className="sidebar-header">
-          <h2>Projects</h2>
-          <div className="sort-controls">
-            {[0, 1, 2].map(method => (
-              <button
-                key={method}
-                className={`sort-button ${sortMethod === method ? 'active' : ''}`}
-                onClick={() => setSortMethod(method as SortMethod)}
-                title={method === 0 ? 'Sort alphabetically' : method === 1 ? 'Sort by recent' : 'Sort by todo count'}
-              >
-                {getSortSymbol(method)}
-              </button>
-            ))}
+          <h2>Projects ({sortedProjects.length})</h2>
+          <div className="sidebar-controls">
+            <div className="sort-controls">
+              {[0, 1, 2].map(method => (
+                <button
+                  key={method}
+                  className={`sort-button ${sortMethod === method ? 'active' : ''}`}
+                  onClick={() => setSortMethod(method as SortMethod)}
+                  title={method === 0 ? 'Sort alphabetically' : method === 1 ? 'Sort by recent' : 'Sort by todo count'}
+                >
+                  {getSortSymbol(method)}
+                </button>
+              ))}
+            </div>
+            <div className="show-empty-toggle">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={showEmptyProjects}
+                  onChange={(e) => setShowEmptyProjects(e.target.checked)}
+                />
+                <span>Show completed</span>
+              </label>
+            </div>
           </div>
         </div>
         <div className="sidebar-projects">

@@ -195,7 +195,8 @@ async function loadTodosData(): Promise<Project[]> {
         const content = await fs.readFile(filePath, 'utf-8');
         const todos = JSON.parse(content);
         
-        if (!Array.isArray(todos) || todos.length === 0) continue;
+        // Include empty sessions too - they might have completed todos
+        if (!Array.isArray(todos)) continue;
         
         // Extract session ID
         const sessionMatch = file.match(/^([a-f0-9-]+)-agent/);
@@ -265,7 +266,7 @@ async function loadTodosData(): Promise<Project[]> {
       const content = await fs.readFile(currentTodosPath, 'utf-8');
       const data = JSON.parse(content);
       
-      if (data.todos && data.todos.length > 0) {
+      if (data.todos && Array.isArray(data.todos)) {
         const sessionId = data.session_id ? data.session_id.substring(0, 8) : 'current';
         // Use the project path from the file if available
         let projectPath = data.project_path || data.projectPath;
