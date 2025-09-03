@@ -303,10 +303,7 @@ function App() {
         if (newSet.has(session.id)) {
           newSet.delete(session.id);
         } else {
-          // Limit to 2 selections for merge
-          if (newSet.size >= 2) {
-            newSet.clear();
-          }
+          // Allow multiple selections for merge
           newSet.add(session.id);
         }
         return newSet;
@@ -325,9 +322,17 @@ function App() {
     setShowContextMenu(true);
   };
 
+  const [mergeSources, setMergeSources] = React.useState<Session[]>([]);
+  const [mergePreview, setMergePreview] = React.useState<{
+    totalTodos: number;
+    duplicates: number;
+    newTodos: number;
+    steps: Array<{source: string; target: string; todos: number}>;
+  } | null>(null);
+
   const startMerge = () => {
-    if (selectedTabs.size !== 2) {
-      console.error('Merge requires exactly 2 selected tabs, got:', selectedTabs.size);
+    if (selectedTabs.size < 2) {
+      console.error('Merge requires at least 2 selected tabs, got:', selectedTabs.size);
       return;
     }
     
@@ -339,53 +344,160 @@ function App() {
     console.log('Starting merge with tabs:', tabArray);
     console.log('Found sessions:', sessions.map(s => s.id));
     
-    if (sessions.length === 2) {
-      // Older is source (will be deleted), newer is target (will be kept)
-      const [older, newer] = sessions.sort((a, b) => 
-        a.lastModified.getTime() - b.lastModified.getTime()
+    if (sessions.length >= 2) {
+      // Sort by date - newest is target, all others are sources
+      const sorted = sessions.sort((a, b) => 
+        b.lastModified.getTime() - a.lastModified.getTime()
       );
-      setMergeSource(older);
-      setMergeTarget(newer);
+      const target = sorted[0];
+      const sources = sorted.slice(1);
+      
+      // Calculate merge preview
+      const preview = calculateMergePreview(sources, target);
+      
+      setMergeTarget(target);
+      setMergeSources(sources);
+      setMergeSource(sources[0]); // For backward compatibility
+      setMergePreview(preview);
       setShowMergeDialog(true);
     } else {
-      console.error('Could not find 2 sessions for merge. Found:', sessions.length);
+      console.error('Could not find enough sessions for merge. Found:', sessions.length);
     }
   };
 
-  const performMerge = async () => {
-    if (!mergeSource || !mergeTarget || !mergeSource.filePath || !mergeTarget.filePath) return;
+  const calculateMergePreview = (sources: Session[], target: Session) => {
+    let totalNewTodos = 0;
+    let totalDuplicates = 0;
+    const steps: Array<{source: string; target: string; todos: number}> = [];
     
-    try {
-      // Merge todos - newer status wins for duplicates
-      const mergedTodos: Todo[] = [...mergeTarget.todos];
-      const targetContents = new Set(mergeTarget.todos.map(t => t.content.toLowerCase()));
+    const targetContents = new Set(target.todos.map(t => t.content.toLowerCase()));
+    const mergedContents = new Set(targetContents);
+    
+    for (const source of sources) {
+      let stepNewTodos = 0;
+      let stepDuplicates = 0;
       
-      // Add unique todos from source
-      for (const sourceTodo of mergeSource.todos) {
-        if (!targetContents.has(sourceTodo.content.toLowerCase())) {
-          mergedTodos.push(sourceTodo);
+      for (const todo of source.todos) {
+        const lowerContent = todo.content.toLowerCase();
+        if (mergedContents.has(lowerContent)) {
+          stepDuplicates++;
+        } else {
+          stepNewTodos++;
+          mergedContents.add(lowerContent);
         }
       }
       
-      // Save merged todos
-      await window.electronAPI.saveTodos(mergeTarget.filePath, mergedTodos);
+      totalNewTodos += stepNewTodos;
+      totalDuplicates += stepDuplicates;
+      steps.push({
+        source: source.id.substring(0, 8),
+        target: target.id.substring(0, 8),
+        todos: stepNewTodos
+      });
+    }
+    
+    return {
+      totalTodos: target.todos.length + totalNewTodos,
+      duplicates: totalDuplicates,
+      newTodos: totalNewTodos,
+      steps
+    };
+  };
+
+  const performMerge = async () => {
+    if (!mergeTarget || !mergeTarget.filePath || mergeSources.length === 0) return;
+    
+    try {
+      // Start with target todos
+      let mergedTodos: Todo[] = [...mergeTarget.todos];
+      const mergedContents = new Set(mergeTarget.todos.map(t => t.content.toLowerCase()));
       
-      // Delete source session
-      await window.electronAPI.deleteTodoFile(mergeSource.filePath);
+      // Track merge progress
+      const mergeResults: Array<{source: string; success: boolean; todosAdded: number; error?: string}> = [];
+      
+      // Sequential merge - one source at a time
+      for (const source of mergeSources) {
+        if (!source.filePath) {
+          mergeResults.push({
+            source: source.id.substring(0, 8),
+            success: false,
+            todosAdded: 0,
+            error: 'No file path'
+          });
+          continue;
+        }
+        
+        try {
+          // Save current state for rollback
+          const beforeMerge = [...mergedTodos];
+          let todosAdded = 0;
+          
+          // Add unique todos from this source
+          for (const sourceTodo of source.todos) {
+            if (!mergedContents.has(sourceTodo.content.toLowerCase())) {
+              mergedTodos.push(sourceTodo);
+              mergedContents.add(sourceTodo.content.toLowerCase());
+              todosAdded++;
+            }
+          }
+          
+          // Verify the merge makes sense
+          if (mergedTodos.length !== beforeMerge.length + todosAdded) {
+            throw new Error(`Merge verification failed: expected ${beforeMerge.length + todosAdded} todos, got ${mergedTodos.length}`);
+          }
+          
+          // Save the updated todos to target
+          await window.electronAPI.saveTodos(mergeTarget.filePath, mergedTodos);
+          
+          // Delete the source session only after successful save
+          await window.electronAPI.deleteTodoFile(source.filePath);
+          
+          mergeResults.push({
+            source: source.id.substring(0, 8),
+            success: true,
+            todosAdded
+          });
+          
+        } catch (error) {
+          // Rollback on error
+          console.error(`Failed to merge session ${source.id}:`, error);
+          mergeResults.push({
+            source: source.id.substring(0, 8),
+            success: false,
+            todosAdded: 0,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+          // Stop merging further sources on error
+          break;
+        }
+      }
+      
+      // Log results
+      console.log('Merge completed:', mergeResults);
       
       // Clear selections and reload
       setSelectedTabs(new Set());
       setShowMergeDialog(false);
       setMergeSource(null);
+      setMergeSources([]);
       setMergeTarget(null);
+      setMergePreview(null);
       
       // Reload data
       await loadTodos();
       
       // Select the target session
       selectSession(mergeTarget);
+      
+      // Show summary if there were any failures
+      const failures = mergeResults.filter(r => !r.success);
+      if (failures.length > 0) {
+        alert(`Merge partially completed. ${failures.length} session(s) failed to merge.`);
+      }
+      
     } catch (error) {
-      console.error('Failed to merge sessions:', error);
+      console.error('Failed to perform merge:', error);
+      alert('Merge failed. No changes were made.');
     }
   };
 
@@ -622,6 +734,61 @@ function App() {
       copyToClipboard(todoFolderPath);
       setShowProjectContextMenu(false);
     }
+  };
+
+  const handleDeleteEmptySessions = async () => {
+    if (!projectContextMenu) return;
+    
+    // Find all empty sessions in this project
+    const emptySessions = projectContextMenu.sessions.filter(s => s.todos.length === 0);
+    
+    if (emptySessions.length === 0) {
+      alert('No empty sessions found in this project.');
+      setShowProjectContextMenu(false);
+      return;
+    }
+    
+    // Ask for confirmation
+    const confirmation = window.confirm(
+      `Found ${emptySessions.length} empty session${emptySessions.length > 1 ? 's' : ''} in "${
+        projectContextMenu.path.split(/[\\/]/).pop()
+      }".\n\nDelete ${emptySessions.length > 1 ? 'them' : 'it'}?`
+    );
+    
+    if (!confirmation) {
+      setShowProjectContextMenu(false);
+      return;
+    }
+    
+    // Delete each empty session
+    let deletedCount = 0;
+    let failedCount = 0;
+    
+    for (const session of emptySessions) {
+      if (session.filePath) {
+        try {
+          await window.electronAPI.deleteTodoFile(session.filePath);
+          deletedCount++;
+          console.log(`Deleted empty session: ${session.id}`);
+        } catch (error) {
+          console.error(`Failed to delete session ${session.id}:`, error);
+          failedCount++;
+        }
+      }
+    }
+    
+    // Close menu and reload
+    setShowProjectContextMenu(false);
+    
+    // Show result
+    if (failedCount > 0) {
+      alert(`Deleted ${deletedCount} empty session(s). Failed to delete ${failedCount} session(s).`);
+    } else if (deletedCount > 0) {
+      console.log(`Successfully deleted ${deletedCount} empty session(s)`);
+    }
+    
+    // Reload todos to reflect changes
+    await loadTodos();
   };
 
   const getStatusCounts = (session: Session) => {
@@ -869,9 +1036,9 @@ function App() {
               </div>
               
               <div className="delete-all-controls">
-                {selectedTabs.size === 2 && (
+                {selectedTabs.size >= 2 && (
                   <button className="merge-btn" onClick={startMerge}>
-                    Merge Sessions
+                    Merge {selectedTabs.size} Sessions
                   </button>
                 )}
                 {!showDeleteConfirm ? (
@@ -1053,25 +1220,27 @@ function App() {
       </div>
       
       {/* Merge Dialog */}
-      {showMergeDialog && mergeSource && mergeTarget && (
+      {showMergeDialog && mergeTarget && mergeSources.length > 0 && (
         <div className="merge-dialog-overlay">
           <div className="merge-dialog">
-            <h3>Merge Sessions</h3>
+            <h3>Merge {mergeSources.length + 1} Sessions</h3>
             
             <div className="merge-info">
-              <div className="merge-source">
-                <h4>Source (will be deleted):</h4>
-                <div className="session-details">
-                  <div>Session: {mergeSource.id.substring(0, 8)}</div>
-                  <div>Todos: {mergeSource.todos.length}</div>
-                  <div>Date: {formatUKDate(mergeSource.lastModified)} {formatUKTime(mergeSource.lastModified)}</div>
-                </div>
+              <div className="merge-sources">
+                <h4>Sources ({mergeSources.length} sessions - will be deleted):</h4>
+                {mergeSources.map((source, idx) => (
+                  <div key={source.id} className="session-details">
+                    <div>#{idx + 1}: {source.id.substring(0, 8)}</div>
+                    <div>Todos: {source.todos.length}</div>
+                    <div>Date: {formatUKDate(source.lastModified)} {formatUKTime(source.lastModified)}</div>
+                  </div>
+                ))}
               </div>
               
               <div className="merge-arrow">→</div>
               
               <div className="merge-target">
-                <h4>Target (will receive todos):</h4>
+                <h4>Target (newest - will keep):</h4>
                 <div className="session-details">
                   <div>Session: {mergeTarget.id.substring(0, 8)}</div>
                   <div>Todos: {mergeTarget.todos.length}</div>
@@ -1080,42 +1249,38 @@ function App() {
               </div>
             </div>
             
-            <div className="merge-stats">
-              <div className="stat">
-                <span className="stat-label">Unique todos to merge:</span>
-                <span className="stat-value">
-                  {mergeSource.todos.filter(s => 
-                    !mergeTarget.todos.some(t => 
-                      t.content.toLowerCase() === s.content.toLowerCase()
-                    )
-                  ).length}
-                </span>
+            {mergePreview && (
+              <div className="merge-preview">
+                <h4>Merge Plan (Sequential):</h4>
+                <div className="merge-steps">
+                  {mergePreview.steps.map((step, idx) => (
+                    <div key={idx} className="merge-step">
+                      Step {idx + 1}: Merge {step.source} → {step.target} 
+                      <span className="step-detail">({step.todos} new todos)</span>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="merge-stats">
+                  <div className="stat">
+                    <span className="stat-label">New todos to add:</span>
+                    <span className="stat-value">{mergePreview.newTodos}</span>
+                  </div>
+                  <div className="stat">
+                    <span className="stat-label">Duplicates (will skip):</span>
+                    <span className="stat-value">{mergePreview.duplicates}</span>
+                  </div>
+                  <div className="stat">
+                    <span className="stat-label">Final todo count:</span>
+                    <span className="stat-value">{mergePreview.totalTodos}</span>
+                  </div>
+                </div>
               </div>
-              <div className="stat">
-                <span className="stat-label">Duplicates (will skip):</span>
-                <span className="stat-value">
-                  {mergeSource.todos.filter(s => 
-                    mergeTarget.todos.some(t => 
-                      t.content.toLowerCase() === s.content.toLowerCase()
-                    )
-                  ).length}
-                </span>
-              </div>
-              <div className="stat">
-                <span className="stat-label">Final todo count:</span>
-                <span className="stat-value">
-                  {mergeTarget.todos.length + mergeSource.todos.filter(s => 
-                    !mergeTarget.todos.some(t => 
-                      t.content.toLowerCase() === s.content.toLowerCase()
-                    )
-                  ).length}
-                </span>
-              </div>
-            </div>
+            )}
             
             <div className="merge-actions">
               <button className="confirm-btn" onClick={performMerge}>
-                Merge and Delete Source
+                Merge and Delete {mergeSources.length} Source{mergeSources.length > 1 ? 's' : ''}
               </button>
               <button className="cancel-btn" onClick={() => {
                 setShowMergeDialog(false);
@@ -1160,6 +1325,10 @@ function App() {
           </div>
           <div className="context-menu-item" onClick={handleProjectCopyTodoPath}>
             Copy Todo Folder Path
+          </div>
+          <div className="context-menu-divider" />
+          <div className="context-menu-item context-menu-danger" onClick={handleDeleteEmptySessions}>
+            Delete Empty Todo Sessions
           </div>
         </div>
       )}
