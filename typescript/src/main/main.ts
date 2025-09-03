@@ -68,8 +68,16 @@ async function findProjectForSession(sessionId: string): Promise<string | null> 
   return null;
 }
 
+// Result type for path reconstruction
+interface PathReconstructionResult {
+  path: string | null;
+  flattenedDir?: string;
+  reconstructionAttempt?: string;
+  failureReason?: string;
+}
+
 // Get real project path from metadata or session files
-async function getRealProjectPath(sessionId: string): Promise<string | null> {
+async function getRealProjectPath(sessionId: string): Promise<PathReconstructionResult> {
   console.log(`Looking for project path for session: ${sessionId}`);
   
   try {
@@ -77,57 +85,81 @@ async function getRealProjectPath(sessionId: string): Promise<string | null> {
     const projectDirs = await fs.readdir(projectsDir);
     console.log(`Found ${projectDirs.length} project directories`);
     
+    // Look for a project directory containing this session
+    let matchedProjDir: string | null = null;
     for (const projDir of projectDirs) {
       const projPath = path.join(projectsDir, projDir);
       const files = await fs.readdir(projPath);
       
       // Check if this project contains our session
       if (files.some(f => f.startsWith(sessionId))) {
-        console.log(`Found session ${sessionId} in project dir: ${projDir}`);
-        // Look for a metadata file
-        const metadataPath = path.join(projPath, 'metadata.json');
+        matchedProjDir = projDir;
+        break;
+      }
+    }
+    
+    if (!matchedProjDir) {
+      // No project directory found for this session
+      return {
+        path: null,
+        failureReason: 'No project directory found containing session files'
+      };
+    }
+    
+    console.log(`Found session ${sessionId} in project dir: ${matchedProjDir}`);
+    const projPath = path.join(projectsDir, matchedProjDir);
+    const files = await fs.readdir(projPath);
+    
+    // Look for a metadata file
+    const metadataPath = path.join(projPath, 'metadata.json');
+    try {
+      const metadata = await fs.readFile(metadataPath, 'utf-8');
+      const data = JSON.parse(metadata);
+      if (data.path) {
+        return { path: data.path, flattenedDir: matchedProjDir };
+      }
+    } catch {
+      // No metadata file, continue
+    }
+    
+    // Try to read the actual path from a session file
+    for (const file of files) {
+      if (file.startsWith(sessionId) && file.endsWith('.json')) {
         try {
-          const metadata = await fs.readFile(metadataPath, 'utf-8');
-          const data = JSON.parse(metadata);
-          if (data.path) {
-            return data.path;
+          const sessionPath = path.join(projPath, file);
+          const sessionContent = await fs.readFile(sessionPath, 'utf-8');
+          const sessionData = JSON.parse(sessionContent);
+          if (sessionData.projectPath) {
+            return { path: sessionData.projectPath, flattenedDir: matchedProjDir };
           }
         } catch {
-          // No metadata file, try to read from session file
-        }
-        
-        // Try to read the actual path from a session file
-        for (const file of files) {
-          if (file.startsWith(sessionId) && file.endsWith('.json')) {
-            try {
-              const sessionPath = path.join(projPath, file);
-              const sessionContent = await fs.readFile(sessionPath, 'utf-8');
-              const sessionData = JSON.parse(sessionContent);
-              if (sessionData.projectPath) {
-                return sessionData.projectPath;
-              }
-            } catch {
-              // Continue to next file
-            }
-          }
-        }
-        
-        // Fallback: try to guess from the flattened directory name
-        const reconstructedPath = guessPathFromFlattenedName(projDir);
-        // Validate the path exists before returning
-        if (reconstructedPath && validatePath(reconstructedPath)) {
-          return reconstructedPath;
-        } else {
-          console.error(`Failed to reconstruct valid path from: ${projDir}`);
-          return null;
+          // Continue to next file
         }
       }
     }
+    
+    // Fallback: try to guess from the flattened directory name
+    const reconstructedPath = guessPathFromFlattenedName(matchedProjDir);
+    
+    // Validate the path exists before returning
+    if (reconstructedPath && validatePath(reconstructedPath)) {
+      return { path: reconstructedPath, flattenedDir: matchedProjDir };
+    } else {
+      console.error(`Failed to reconstruct valid path from: ${matchedProjDir}`);
+      return {
+        path: null,
+        flattenedDir: matchedProjDir,
+        reconstructionAttempt: reconstructedPath || 'Failed to generate path',
+        failureReason: reconstructedPath ? 'Reconstructed path does not exist on filesystem' : 'Path reconstruction failed completely'
+      };
+    }
   } catch (error) {
     console.error('Error finding project path:', error);
+    return {
+      path: null,
+      failureReason: `Error during path lookup: ${error}`
+    };
   }
-  
-  return null;
 }
 
 // Validate if a path exists on the filesystem
@@ -411,21 +443,28 @@ async function loadTodosData(): Promise<Project[]> {
         
         // If we didn't find it in the file, try the project directories
         if (projectPath === 'Unknown Project') {
-          const realPath = await getRealProjectPath(fullSessionId);
-          if (realPath && realPath !== 'Unknown Project') {
-            projectPath = realPath;
-            logEntries.push(`✓ SUCCESS: Session ${sessionId} -> ${realPath}`);
+          const result = await getRealProjectPath(fullSessionId);
+          if (result.path && result.path !== 'Unknown Project') {
+            projectPath = result.path;
+            logEntries.push(`✓ SUCCESS: Session ${sessionId} -> ${result.path}`);
             // Save metadata for future use if we found the path
-            const projDirs = await fs.readdir(projectsDir);
-            for (const dir of projDirs) {
-              if (fullSessionId.includes(dir.substring(0, 8))) {
-                await saveProjectMetadata(dir, realPath);
-                break;
-              }
+            if (result.flattenedDir) {
+              await saveProjectMetadata(result.flattenedDir, result.path);
             }
           } else {
             projectPath = 'Unknown Project';
-            logEntries.push(`✗ FAILED: Session ${sessionId} -> Could not reconstruct path`);
+            // Detailed failure logging
+            let failureDetails = `✗ FAILED: Session ${sessionId}`;
+            if (result.flattenedDir) {
+              failureDetails += `\n    Flattened dir: ${result.flattenedDir}`;
+            }
+            if (result.reconstructionAttempt) {
+              failureDetails += `\n    Attempted path: ${result.reconstructionAttempt}`;
+            }
+            if (result.failureReason) {
+              failureDetails += `\n    Reason: ${result.failureReason}`;
+            }
+            logEntries.push(failureDetails);
           }
         }
         

@@ -62,6 +62,7 @@ function App() {
   const [paddingMode, setPaddingMode] = useState<PaddingMode>(2); // none
   const [filterMode, setFilterMode] = useState<FilterMode>('all'); // show all
   const [showEmptyProjects, setShowEmptyProjects] = useState(false); // hide empty projects by default
+  const [showFailedReconstructions, setShowFailedReconstructions] = useState(false); // hide failed path reconstructions by default
   
   // Edit state management
   const [editedTodos, setEditedTodos] = useState<Todo[] | null>(null);
@@ -668,10 +669,19 @@ function App() {
     return tooltipLines.join('\n');
   };
 
-  // Filter projects based on showEmptyProjects setting
-  const filteredProjects = showEmptyProjects 
+  // Filter projects based on settings
+  let filteredProjects = showEmptyProjects 
     ? projects 
     : projects.filter(p => p.sessions.some(s => s.todos.length > 0));
+  
+  // Further filter based on failed reconstructions
+  if (!showFailedReconstructions) {
+    filteredProjects = filteredProjects.filter(p => 
+      p.path !== 'Unknown Project' && 
+      p.path !== null && 
+      p.path !== ''
+    );
+  }
   
   const sortedProjects = [...filteredProjects].sort((a, b) => {
     switch(sortMethod) {
@@ -753,6 +763,16 @@ function App() {
                   onChange={(e) => setShowEmptyProjects(e.target.checked)}
                 />
                 <span>Show empty</span>
+              </label>
+            </div>
+            <div className="show-empty-toggle">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={showFailedReconstructions}
+                  onChange={(e) => setShowFailedReconstructions(e.target.checked)}
+                />
+                <span>Show failed paths</span>
               </label>
             </div>
           </div>
