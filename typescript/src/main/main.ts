@@ -130,24 +130,64 @@ function guessPathFromFlattenedName(flatPath: string): string {
   
   console.log(`Guessing path from flattened name: ${flatPath}`);
   
-  // Windows path with drive letter (e.g., C--Users-mathew-burkitt-Source-repos-DT-cc-todo-hook-tracker)
+  // First check if we have metadata for this project
+  try {
+    const metadataPath = path.join(projectsDir, flatPath, 'metadata.json');
+    if (require('fs').existsSync(metadataPath)) {
+      const metadata = require('fs').readFileSync(metadataPath, 'utf-8');
+      const data = JSON.parse(metadata);
+      if (data.path) {
+        console.log(`Found metadata path: ${data.path}`);
+        return data.path;
+      }
+    }
+  } catch (error) {
+    // No metadata, continue with guessing
+  }
+  
+  // Windows path with drive letter (e.g., C--Users-john-smith-Source-repos-my-project)
   const windowsMatch = flatPath.match(/^([A-Z])--(.+)$/);
   if (windowsMatch) {
     const [, driveLetter, restOfPath] = windowsMatch;
     
-    // Special handling for known projects with hyphens
-    // cc-todo-hook-tracker is a special case
-    if (restOfPath.includes('cc-todo-hook-tracker')) {
-      const converted = `${driveLetter}:${pathSep}Users${pathSep}mathew.burkitt${pathSep}Source${pathSep}repos${pathSep}DT${pathSep}cc-todo-hook-tracker`;
-      console.log(`Special case for cc-todo-hook-tracker: ${converted}`);
-      return converted;
+    // Try to intelligently reconstruct the path
+    // Common patterns: usernames often have dots instead of hyphens
+    let pathParts = restOfPath.split('-');
+    let reconstructed = [];
+    
+    // Process path parts
+    let i = 0;
+    while (i < pathParts.length) {
+      const part = pathParts[i];
+      
+      // Check if this looks like it might be part of a username (e.g., first-last)
+      if (i === 1 && pathParts[0] === 'Users' && i + 1 < pathParts.length) {
+        // Check if next part looks like it could be a last name
+        const nextPart = pathParts[i + 1];
+        if (nextPart && /^[a-z]+$/i.test(part) && /^[a-z]+$/i.test(nextPart)) {
+          // Likely a firstname.lastname pattern
+          reconstructed.push(`${part}.${nextPart}`);
+          i += 2;
+          continue;
+        }
+      }
+      
+      // Check for known hyphenated directory names by looking for patterns
+      // If we see common path segments followed by something with hyphens
+      if (part === 'DT' && i + 1 < pathParts.length) {
+        // The next parts might be a hyphenated project name
+        // Collect all remaining parts as they might form the project name
+        const remainingParts = pathParts.slice(i + 1);
+        reconstructed.push(part);
+        reconstructed.push(remainingParts.join('-'));
+        break;
+      }
+      
+      reconstructed.push(part);
+      i++;
     }
     
-    // For other paths, replace single hyphens with path separator
-    // This will be wrong for directories that contain hyphens, but it's the best we can do
-    const converted = `${driveLetter}:${pathSep}${restOfPath
-      .replace(/mathew-burkitt/, 'mathew.burkitt') // Handle username with dot
-      .replace(/-/g, pathSep)}`;
+    const converted = `${driveLetter}:${pathSep}${reconstructed.join(pathSep)}`;
     console.log(`Converted to: ${converted}`);
     return converted;
   }
@@ -224,7 +264,20 @@ async function loadTodosData(): Promise<Project[]> {
         
         // If we didn't find it in the file, try the project directories
         if (projectPath === 'Unknown Project') {
-          projectPath = await getRealProjectPath(fullSessionId) || 'Unknown Project';
+          const realPath = await getRealProjectPath(fullSessionId);
+          if (realPath) {
+            projectPath = realPath;
+            // Save metadata for future use if we found the path
+            const projDirs = await fs.readdir(projectsDir);
+            for (const dir of projDirs) {
+              if (fullSessionId.includes(dir.substring(0, 8))) {
+                await saveProjectMetadata(dir, realPath);
+                break;
+              }
+            }
+          } else {
+            projectPath = 'Unknown Project';
+          }
         }
         
         // Get or create project
@@ -266,16 +319,11 @@ async function loadTodosData(): Promise<Project[]> {
         // Use the project path from the file if available
         let projectPath = data.project_path || data.projectPath;
         
-        // If no project path, try to determine from working directory
+        // If no project path, use the current working directory
         if (!projectPath) {
-          // Check if we're currently in cc-todo-hook-tracker
           const cwd = process.cwd();
-          if (cwd.includes('cc-todo-hook-tracker')) {
-            projectPath = cwd.substring(0, cwd.indexOf('cc-todo-hook-tracker') + 'cc-todo-hook-tracker'.length);
-            console.log('Detected cc-todo-hook-tracker from cwd:', projectPath);
-          } else {
-            projectPath = 'Current Session';
-          }
+          projectPath = cwd;
+          console.log('Using current working directory:', projectPath);
         }
         
         console.log(`Current session project path: ${projectPath}`);
