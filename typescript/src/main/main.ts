@@ -123,6 +123,62 @@ async function getRealProjectPath(sessionId: string): Promise<string | null> {
   return null;
 }
 
+// Validate if a path exists on the filesystem
+function validatePath(testPath: string): boolean {
+  try {
+    return require('fs').existsSync(testPath);
+  } catch {
+    return false;
+  }
+}
+
+// Build path incrementally and validate each step
+function buildAndValidatePath(parts: string[], isWindows: boolean): string | null {
+  const pathSep = isWindows ? '\\' : '/';
+  let currentPath = isWindows ? `${parts[0]}:` : '';
+  
+  for (let i = isWindows ? 1 : 0; i < parts.length; i++) {
+    const part = parts[i];
+    
+    // Special handling for Users directory - next part might be a dotted username
+    if (isWindows && i === 1 && parts[1] === 'Users' && i + 2 < parts.length) {
+      // Try combining next two parts with a dot as username (e.g., first.last)
+      const possibleUsername = `${parts[i + 1]}.${parts[i + 2]}`;
+      const userPath = currentPath + pathSep + 'Users' + pathSep + possibleUsername;
+      
+      if (validatePath(userPath)) {
+        currentPath = userPath;
+        console.log(`✓ Valid username path: ${userPath}`);
+        // Skip the next two parts as we've consumed them
+        i += 2;
+        continue;
+      }
+    }
+    
+    const testPath = currentPath + pathSep + part;
+    
+    // Check if this path segment exists
+    if (validatePath(testPath)) {
+      currentPath = testPath;
+      console.log(`✓ Valid path segment: ${testPath}`);
+    } else {
+      // Try with a dot prefix if the segment doesn't exist
+      const dotPath = currentPath + pathSep + '.' + part;
+      if (validatePath(dotPath)) {
+        currentPath = dotPath;
+        console.log(`✓ Valid path segment (with dot): ${dotPath}`);
+        parts[i] = '.' + part; // Update the part for final path
+      } else {
+        console.log(`✗ Invalid path segment: ${testPath} (also tried ${dotPath})`);
+        // Continue anyway - might be a new directory
+        currentPath = testPath;
+      }
+    }
+  }
+  
+  return currentPath;
+}
+
 // Best-effort conversion of flattened path
 function guessPathFromFlattenedName(flatPath: string): string {
   const isWindows = process.platform === 'win32';
@@ -150,21 +206,59 @@ function guessPathFromFlattenedName(flatPath: string): string {
   if (windowsMatch) {
     const [, driveLetter, restOfPath] = windowsMatch;
     
-    // Try to intelligently reconstruct the path
-    // Common patterns: usernames often have dots instead of hyphens
+    // Simple split on single dash first
     let pathParts = restOfPath.split('-');
-    let reconstructed = [];
     
-    // Process path parts
+    // Process parts to handle double dashes (empty parts mean next part should have dot)
+    let processedParts = [];
+    for (let i = 0; i < pathParts.length; i++) {
+      if (pathParts[i] === '' && i + 1 < pathParts.length) {
+        // Empty part means next part should have a dot prefix
+        processedParts.push('.' + pathParts[i + 1]);
+        i++; // Skip the next part as we've consumed it
+      } else if (pathParts[i] !== '') {
+        processedParts.push(pathParts[i]);
+      }
+    }
+    
+    // Build path with validation
+    const allParts = [driveLetter, ...processedParts];
+    const validatedPath = buildAndValidatePath(allParts, true);
+    
+    if (validatedPath) {
+      console.log(`Validated path: ${validatedPath}`);
+      return validatedPath;
+    }
+    
+    // If validation didn't work perfectly, try more complex reconstruction
+    // Handle double dashes which represent dots in directory names
+    const processedPath = restOfPath.replace(/--/g, '|DOT|');
+    pathParts = processedPath.split('-');
+    
+    // Restore dots for parts that had double dashes
+    pathParts = pathParts.map(part => part.replace(/\|DOT\|/g, '.'));
+    
+    // Try validation again with dot-processed parts
+    const dotProcessedParts = [driveLetter, ...pathParts];
+    const dotValidatedPath = buildAndValidatePath(dotProcessedParts, true);
+    
+    if (dotValidatedPath) {
+      console.log(`Validated path (with dot processing): ${dotValidatedPath}`);
+      return dotValidatedPath;
+    }
+    
+    // Fall back to heuristic reconstruction if validation fails
+    let reconstructed = [];
     let i = 0;
     while (i < pathParts.length) {
       const part = pathParts[i];
       
       // Check if this looks like it might be part of a username (e.g., first-last)
-      if (i === 1 && pathParts[0] === 'Users' && i + 1 < pathParts.length) {
+      // But skip if it contains a dot (already processed)
+      if (i === 1 && pathParts[0] === 'Users' && i + 1 < pathParts.length && !part.includes('.')) {
         // Check if next part looks like it could be a last name
         const nextPart = pathParts[i + 1];
-        if (nextPart && /^[a-z]+$/i.test(part) && /^[a-z]+$/i.test(nextPart)) {
+        if (nextPart && /^[a-z]+$/i.test(part) && /^[a-z]+$/i.test(nextPart) && !nextPart.includes('.')) {
           // Likely a firstname.lastname pattern
           reconstructed.push(`${part}.${nextPart}`);
           i += 2;
@@ -188,7 +282,7 @@ function guessPathFromFlattenedName(flatPath: string): string {
     }
     
     const converted = `${driveLetter}:${pathSep}${reconstructed.join(pathSep)}`;
-    console.log(`Converted to: ${converted}`);
+    console.log(`Fallback conversion: ${converted}`);
     return converted;
   }
   

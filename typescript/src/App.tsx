@@ -86,6 +86,11 @@ function App() {
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
   
+  // Project context menu state
+  const [projectContextMenu, setProjectContextMenu] = useState<Project | null>(null);
+  const [showProjectContextMenu, setShowProjectContextMenu] = useState(false);
+  const [projectContextMenuPosition, setProjectContextMenuPosition] = useState({ x: 0, y: 0 });
+  
   // Resizable panes state
   const [leftPaneWidth, setLeftPaneWidth] = useState(260);
   const [isResizing, setIsResizing] = useState(false);
@@ -98,6 +103,22 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Click outside handler for context menus
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.context-menu')) {
+        setShowContextMenu(false);
+        setShowProjectContextMenu(false);
+      }
+    };
+    
+    if (showContextMenu || showProjectContextMenu) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [showContextMenu, showProjectContextMenu]);
+  
   // Keyboard event handler
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -105,6 +126,7 @@ function App() {
       if (e.key === 'Escape') {
         clearSelection();
         setShowContextMenu(false);
+        setShowProjectContextMenu(false);
         return;
       }
       
@@ -553,6 +575,49 @@ function App() {
       default: return '?';
     }
   };
+  
+  const handleProjectContextMenu = (e: React.MouseEvent, project: Project) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setProjectContextMenu(project);
+    setShowProjectContextMenu(true);
+    setProjectContextMenuPosition({ x: e.clientX, y: e.clientY });
+  };
+  
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      console.log('Copied to clipboard:', text);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+  
+  const handleProjectCopyName = () => {
+    if (projectContextMenu) {
+      const projectName = projectContextMenu.path ? projectContextMenu.path.split(/[\\/]/).pop() : 'Unknown Project';
+      copyToClipboard(projectName || '');
+      setShowProjectContextMenu(false);
+    }
+  };
+  
+  const handleProjectCopyCodePath = () => {
+    if (projectContextMenu) {
+      copyToClipboard(projectContextMenu.path);
+      setShowProjectContextMenu(false);
+    }
+  };
+  
+  const handleProjectCopyTodoPath = () => {
+    if (projectContextMenu && projectContextMenu.sessions.length > 0) {
+      // Get the todo folder path from the first session's file path
+      const firstSessionPath = projectContextMenu.sessions[0].filePath;
+      const lastSlashIndex = Math.max(firstSessionPath.lastIndexOf('/'), firstSessionPath.lastIndexOf('\\'));
+      const todoFolderPath = firstSessionPath.substring(0, lastSlashIndex);
+      copyToClipboard(todoFolderPath);
+      setShowProjectContextMenu(false);
+    }
+  };
 
   const getStatusCounts = (session: Session) => {
     const counts = session.todos.reduce((acc, todo) => {
@@ -565,6 +630,42 @@ function App() {
       in_progress: counts.in_progress || 0,
       completed: counts.completed || 0
     };
+  };
+  
+  const getSessionTooltip = (session: Session, project: Project) => {
+    const counts = getStatusCounts(session);
+    const projectName = project.path ? project.path.split(/[\\/]/).pop() : 'Unknown Project';
+    
+    // Get earliest and latest todo dates
+    let earliestDate: Date | null = null;
+    let latestDate: Date | null = null;
+    
+    session.todos.forEach(todo => {
+      // Note: todos don't have individual dates, so we use session date
+      // In a real scenario, each todo might have its own creation/update date
+    });
+    
+    // Get the todo folder path
+    const lastSlashIndex = Math.max(session.filePath.lastIndexOf('/'), session.filePath.lastIndexOf('\\'));
+    const todoFolderPath = session.filePath.substring(0, lastSlashIndex);
+    
+    const tooltipLines = [
+      `Project Name: ${projectName}`,
+      `Project Path: ${project.path}`,
+      `Todo Folder: ${todoFolderPath}`,
+      `Session ID: ${session.id}`,
+      `File: ${session.filePath.split(/[\\/]/).pop()}`,
+      '',
+      'Todo Summary:',
+      `  ${counts.pending} Pending`,
+      `  ${counts.in_progress} In Progress`,
+      `  ${counts.completed} Completed`,
+      `  Total: ${session.todos.length} todos`,
+      '',
+      `Last Modified: ${formatUKDate(session.lastModified)} ${formatUKTime(session.lastModified)}`
+    ];
+    
+    return tooltipLines.join('\n');
   };
 
   // Filter projects based on showEmptyProjects setting
@@ -665,6 +766,7 @@ function App() {
                 key={project.path}
                 className={`project-item ${selectedProject === project ? 'selected' : ''} ${todoCount === 0 ? 'empty-project' : ''}`}
                 onClick={() => selectProject(project)}
+                onContextMenu={(e) => handleProjectContextMenu(e, project)}
               >
                 <div className="project-name">
                   {project.path ? project.path.split(/[\\/]/).pop() : 'Unknown Project'}
@@ -768,6 +870,7 @@ function App() {
                     className={`session-tab ${isSelected ? 'active' : ''} ${isMultiSelected ? 'multi-selected' : ''}`}
                     onClick={(e) => handleTabClick(e, session)}
                     onContextMenu={(e) => handleTabRightClick(e, session)}
+                    title={getSessionTooltip(session, selectedProject)}
                   >
                     <div className="session-info">
                       <div className="session-id">{session.id.substring(0, 8)}</div>
@@ -986,6 +1089,25 @@ function App() {
             }
           }}>
             Start Merge Mode
+          </div>
+        </div>
+      )}
+      
+      {/* Project Context Menu */}
+      {showProjectContextMenu && (
+        <div
+          className="context-menu"
+          style={{ left: projectContextMenuPosition.x, top: projectContextMenuPosition.y }}
+          onMouseLeave={() => setShowProjectContextMenu(false)}
+        >
+          <div className="context-menu-item" onClick={handleProjectCopyName}>
+            Copy Project Name
+          </div>
+          <div className="context-menu-item" onClick={handleProjectCopyCodePath}>
+            Copy Project Code Path
+          </div>
+          <div className="context-menu-item" onClick={handleProjectCopyTodoPath}>
+            Copy Todo Folder Path
           </div>
         </div>
       )}
