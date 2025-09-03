@@ -923,7 +923,36 @@ function App() {
             </div>
             
             {selectedSession && (
-              <div className="session-content">
+              <div 
+                className={`session-content ${selectedTabs.has(selectedSession.id) ? 'multi-selected' : ''}`}
+                onClick={(e) => {
+                  // Only handle shift-click or ctrl/cmd-click for merge selection
+                  // Ignore clicks on interactive elements
+                  const target = e.target as HTMLElement;
+                  if (target.closest('.todo-item') || target.closest('.todos-header') || target.closest('.status-bar')) {
+                    return;
+                  }
+                  
+                  if (e.shiftKey || e.ctrlKey || e.metaKey) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleTabClick(e, selectedSession);
+                  }
+                }}
+                onContextMenu={(e) => {
+                  // Right-click also selects for merge
+                  // Ignore clicks on interactive elements
+                  const target = e.target as HTMLElement;
+                  if (target.closest('.todo-item') || target.closest('.todos-header') || target.closest('.status-bar')) {
+                    return;
+                  }
+                  
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleTabClick({ ...e, shiftKey: true } as any, selectedSession);
+                }}
+                title={`${selectedTabs.has(selectedSession.id) ? 'Selected for merge • ' : ''}Shift+Click or Right-Click to select for merge`}
+              >
                 <div className="todos-container">
                   <div className="todos-header">
                     <h2>Todos ({displayTodos.length})</h2>
@@ -938,6 +967,7 @@ function App() {
                     {filteredTodos.map((todo, index) => {
                       const originalIndex = displayTodos.indexOf(todo);
                       const isSelected = selectedIndices.has(originalIndex);
+                      const sequenceNumber = index + 1;
                       
                       return (
                         <div
@@ -952,6 +982,7 @@ function App() {
                           onDragLeave={() => setDragOverIndex(null)}
                           onClick={(e) => handleTodoClick(e, originalIndex)}
                         >
+                          <span className="todo-sequence">{sequenceNumber}.</span>
                           <span className={`status-icon ${todo.status}`}>
                             {getStatusSymbol(todo.status)}
                           </span>
