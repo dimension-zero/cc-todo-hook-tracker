@@ -657,10 +657,9 @@ function App() {
       <div 
         className="divider" 
         onMouseDown={() => setIsResizing(true)}
-        style={{ left: leftPaneWidth }}
       />
       
-      <div className="main-content" style={{ marginLeft: leftPaneWidth + 6 }}>
+      <div className="main-content">
         {selectedProject && (
           <>
             <div className="session-tabs">

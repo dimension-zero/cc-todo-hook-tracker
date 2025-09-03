@@ -1323,6 +1323,7 @@ body {
   cursor: col-resize;
   position: relative;
   transition: background 0.2s;
+  flex-shrink: 0;
 }
 
 .divider:hover {
