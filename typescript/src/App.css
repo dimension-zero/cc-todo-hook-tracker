@@ -213,6 +213,19 @@ body {
   overflow: hidden;
 }
 
+/* Project header */
+.project-header {
+  padding: 12px 20px;
+  border-bottom: 1px solid #35373b;
+  background: #222529;
+}
+
+.project-path {
+  font-size: 14px;
+  color: #d1d2d3;
+  font-weight: 500;
+}
+
 .content-header {
   background: #222529;
   border-bottom: 1px solid #35373b;
@@ -848,12 +861,14 @@ body {
 
 /* Context Menu */
 .context-menu {
+  position: fixed;
   background: #222529;
   border: 1px solid #35373b;
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   padding: 4px 0;
-  min-width: 200px;
+  min-width: 150px;
+  z-index: 1000;
 }
 
 .context-menu-item {
@@ -939,13 +954,14 @@ body {
 }
 
 .session-tab {
-  padding: 8px 12px;
+  padding: 8px 4px;
   background: #35373b;
   border: 1px solid #4a4d52;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
   min-width: 200px;
+  text-align: center;
 }
 
 .session-tab:hover {
@@ -960,6 +976,21 @@ body {
 
 .session-tab.multi-selected {
   border: 2px solid #ffa500;
+}
+
+.session-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #d1d2d3;
+  margin-bottom: 4px;
+}
+
+.session-tab .session-stats {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  font-size: 12px;
+  color: #8e9297;
 }
 
 .session-info {

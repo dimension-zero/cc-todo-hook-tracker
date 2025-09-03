@@ -298,12 +298,18 @@ function App() {
   };
 
   const startMerge = () => {
-    if (selectedTabs.size !== 2) return;
+    if (selectedTabs.size !== 2) {
+      console.error('Merge requires exactly 2 selected tabs, got:', selectedTabs.size);
+      return;
+    }
     
     const tabArray = Array.from(selectedTabs);
     const sessions = selectedProject?.sessions.filter(s => 
       tabArray.includes(s.id)
     ) || [];
+    
+    console.log('Starting merge with tabs:', tabArray);
+    console.log('Found sessions:', sessions.map(s => s.id));
     
     if (sessions.length === 2) {
       // Older is source (will be deleted), newer is target (will be kept)
@@ -313,6 +319,8 @@ function App() {
       setMergeSource(older);
       setMergeTarget(newer);
       setShowMergeDialog(true);
+    } else {
+      console.error('Could not find 2 sessions for merge. Found:', sessions.length);
     }
   };
 
@@ -639,7 +647,7 @@ function App() {
                 className={`project-item ${selectedProject === project ? 'selected' : ''}`}
                 onClick={() => selectProject(project)}
               >
-                <div className="project-name">{project.path || 'Unknown Project'}</div>
+                <div className="project-name">{project.path ? project.path.split(/[\\/]/).pop() : 'Unknown Project'}</div>
                 <div className="project-stats">
                   {todoCount} todos • {project.sessions.length} sessions
                   {project.mostRecentTodoDate && (
@@ -662,6 +670,63 @@ function App() {
       <div className="main-content">
         {selectedProject && (
           <>
+            <div className="project-header">
+              <h1>{selectedProject.path}</h1>
+            </div>
+            <div className="control-bar">
+              <div className="filter-controls">
+                <label>Filter:</label>
+                <div className="filter-toggle">
+                  <button
+                    className={`filter-btn ${filterMode === 'all' ? 'active' : ''}`}
+                    onClick={() => setFilterMode('all')}
+                  >
+                    All
+                  </button>
+                  <button
+                    className={`filter-btn ${filterMode === 'pending' ? 'active' : ''}`}
+                    onClick={() => setFilterMode('pending')}
+                  >
+                    Active
+                  </button>
+                  <button
+                    className={`filter-btn ${filterMode === 'active' ? 'active' : ''}`}
+                    onClick={() => setFilterMode('active')}
+                  >
+                    In Progress
+                  </button>
+                </div>
+              </div>
+              
+              <div className="padding-controls">
+                <label className="spacing-label">SPACING:</label>
+                <div className="padding-buttons">
+                  {[0, 1, 2].map(mode => (
+                    <button
+                      key={mode}
+                      className={`padding-btn ${paddingMode === mode ? 'active' : ''}`}
+                      onClick={() => setPaddingMode(mode as PaddingMode)}
+                    >
+                      {mode === 0 ? 'Normal' : mode === 1 ? 'Compact' : 'None'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="delete-all-controls">
+                {!showDeleteConfirm ? (
+                  <button className="delete-all-btn" onClick={() => setShowDeleteConfirm(true)}>
+                    Delete Session
+                  </button>
+                ) : (
+                  <div className="delete-confirm">
+                    <span>Delete this session?</span>
+                    <button className="confirm-yes" onClick={handleDeleteSession}>Yes</button>
+                    <button className="confirm-no" onClick={() => setShowDeleteConfirm(false)}>No</button>
+                  </div>
+                )}
+              </div>
+            </div>
             <div className="session-tabs">
               {selectedProject.sessions.map((session) => {
                 const counts = getStatusCounts(session);
@@ -676,15 +741,15 @@ function App() {
                     onContextMenu={(e) => handleTabRightClick(e, session)}
                   >
                     <div className="session-info">
-                      <span className="session-id">{session.id.substring(0, 8)}</span>
-                      <span className="todo-count">
+                      <div className="session-id">{session.id.substring(0, 8)}</div>
+                      <div className="todo-count">
                         <span className="pending">{counts.pending}p</span>
                         <span className="in-progress">{counts.in_progress}i</span>
                         <span className="completed">{counts.completed}c</span>
-                      </span>
-                      <span className="session-date">
+                      </div>
+                      <div className="session-date">
                         {formatUKDate(session.lastModified)} {formatUKTime(session.lastModified)}
-                      </span>
+                      </div>
                     </div>
                   </div>
                 );
@@ -698,49 +763,6 @@ function App() {
             
             {selectedSession && (
               <div className="session-content">
-                <div className="control-bar">
-                  <div className="filter-controls">
-                    <label>Filter:</label>
-                    <select 
-                      value={filterMode} 
-                      onChange={(e) => setFilterMode(e.target.value as FilterMode)}
-                    >
-                      <option value="all">All</option>
-                      <option value="pending">Pending + Active</option>
-                      <option value="active">Active Only</option>
-                    </select>
-                  </div>
-                  
-                  <div className="padding-controls">
-                    <label className="spacing-label">SPACING:</label>
-                    <div className="padding-buttons">
-                      {[0, 1, 2].map(mode => (
-                        <button
-                          key={mode}
-                          className={`padding-btn ${paddingMode === mode ? 'active' : ''}`}
-                          onClick={() => setPaddingMode(mode as PaddingMode)}
-                        >
-                          {mode === 0 ? 'Normal' : mode === 1 ? 'Compact' : 'None'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  <div className="delete-all-controls">
-                    {!showDeleteConfirm ? (
-                      <button className="delete-all-btn" onClick={() => setShowDeleteConfirm(true)}>
-                        Delete Session
-                      </button>
-                    ) : (
-                      <div className="delete-confirm">
-                        <span>Delete this session?</span>
-                        <button className="confirm-yes" onClick={handleDeleteSession}>Yes</button>
-                        <button className="confirm-no" onClick={() => setShowDeleteConfirm(false)}>No</button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                
                 <div className="todos-container">
                   <div className="todos-header">
                     <h2>Todos ({displayTodos.length})</h2>
