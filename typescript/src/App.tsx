@@ -651,7 +651,7 @@ function App() {
                   checked={showEmptyProjects}
                   onChange={(e) => setShowEmptyProjects(e.target.checked)}
                 />
-                <span>Show completed</span>
+                <span>Show empty</span>
               </label>
             </div>
           </div>
@@ -659,15 +659,26 @@ function App() {
         <div className="sidebar-projects">
           {sortedProjects.map((project) => {
             const todoCount = project.sessions.reduce((sum, s) => sum + s.todos.length, 0);
+            const hasActiveTodos = project.sessions.some(s => s.todos.some(t => t.status !== 'completed'));
             return (
               <div
                 key={project.path}
-                className={`project-item ${selectedProject === project ? 'selected' : ''}`}
+                className={`project-item ${selectedProject === project ? 'selected' : ''} ${todoCount === 0 ? 'empty-project' : ''}`}
                 onClick={() => selectProject(project)}
               >
-                <div className="project-name">{project.path ? project.path.split(/[\\/]/).pop() : 'Unknown Project'}</div>
+                <div className="project-name">
+                  {project.path ? project.path.split(/[\\/]/).pop() : 'Unknown Project'}
+                  {todoCount === 0 && <span className="empty-badge"> (empty)</span>}
+                </div>
                 <div className="project-stats">
-                  {todoCount} todos • {project.sessions.length} sessions
+                  {todoCount === 0 ? (
+                    'No todos • '
+                  ) : hasActiveTodos ? (
+                    `${todoCount} todos • `
+                  ) : (
+                    `${todoCount} completed • `
+                  )}
+                  {project.sessions.length} session{project.sessions.length !== 1 ? 's' : ''}
                   {project.mostRecentTodoDate && (
                     <div className="project-date">
                       {formatUKDate(project.mostRecentTodoDate)}

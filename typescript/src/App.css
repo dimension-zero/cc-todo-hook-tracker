@@ -162,6 +162,16 @@ body {
   color: white;
 }
 
+.empty-project {
+  opacity: 0.7;
+}
+
+.empty-badge {
+  color: #8e9297;
+  font-size: 11px;
+  font-style: italic;
+}
+
 .project-name {
   font-size: 14px;
   font-weight: 500;
@@ -983,13 +993,13 @@ body {
 }
 
 .session-tab {
-  padding: 8px 4px;
+  padding: 8px 2px;
   background: #35373b;
   border: 1px solid #4a4d52;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
-  min-width: 200px;
+  min-width: 180px;
   text-align: center;
 }
 
@@ -1017,9 +1027,11 @@ body {
 .session-tab .session-stats {
   display: flex;
   justify-content: center;
-  gap: 12px;
-  font-size: 12px;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
   color: #8e9297;
+  margin-top: 2px;
 }
 
 .session-info {

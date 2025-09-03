@@ -138,9 +138,7 @@ function guessPathFromFlattenedName(flatPath: string): string {
     // Special handling for known projects with hyphens
     // cc-todo-hook-tracker is a special case
     if (restOfPath.includes('cc-todo-hook-tracker')) {
-      const converted = `${driveLetter}:${pathSep}${restOfPath
-        .replace(/Users-mathew-burkitt/, 'Users' + pathSep + 'mathew.burkitt')
-        .replace(/Source-repos-DT-cc-todo-hook-tracker/, 'Source' + pathSep + 'repos' + pathSep + 'DT' + pathSep + 'cc-todo-hook-tracker')}`;
+      const converted = `${driveLetter}:${pathSep}Users${pathSep}mathew.burkitt${pathSep}Source${pathSep}repos${pathSep}DT${pathSep}cc-todo-hook-tracker`;
       console.log(`Special case for cc-todo-hook-tracker: ${converted}`);
       return converted;
     }
@@ -188,9 +186,6 @@ async function loadTodosData(): Promise<Project[]> {
       try {
         const filePath = path.join(todosDir, file);
         const stats = await fs.stat(filePath);
-        
-        // Skip small files
-        if (stats.size < 10) continue;
         
         const content = await fs.readFile(filePath, 'utf-8');
         const todos = JSON.parse(content);
