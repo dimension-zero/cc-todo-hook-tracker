@@ -121,5 +121,6 @@ Contributions are welcome! Please feel free to submit pull requests or open issu
 
 ## Author
 
-Originally created by Jameson Nyp (@JamesonNyp)
-PowerShell implementation by Dimension Zero (@dimension-zero)
+* Original Bash CLI version created by Jameson Nyp (@JamesonNyp)
+* PowerShell implementation by Dimension Zero (@dimension-zero <zero@ditech.ai>)
+* TypeScript/Electron GUI by Dimension Zero (@dimension-zero <zero@ditech.ai>)
