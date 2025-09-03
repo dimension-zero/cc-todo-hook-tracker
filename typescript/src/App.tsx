@@ -295,14 +295,18 @@ function App() {
 
   // Tab selection for merging
   const handleTabClick = (e: React.MouseEvent, session: Session) => {
-    if (e.ctrlKey || e.metaKey) {
+    if (e.ctrlKey || e.metaKey || e.shiftKey) {
       e.preventDefault();
-      // Toggle tab selection for merge
+      // Toggle tab selection for merge (Ctrl/Cmd+click or Shift+click)
       setSelectedTabs(prev => {
         const newSet = new Set(prev);
         if (newSet.has(session.id)) {
           newSet.delete(session.id);
         } else {
+          // Limit to 2 selections for merge
+          if (newSet.size >= 2) {
+            newSet.clear();
+          }
           newSet.add(session.id);
         }
         return newSet;
@@ -865,6 +869,11 @@ function App() {
               </div>
               
               <div className="delete-all-controls">
+                {selectedTabs.size === 2 && (
+                  <button className="merge-btn" onClick={startMerge}>
+                    Merge Sessions
+                  </button>
+                )}
                 {!showDeleteConfirm ? (
                   <button className="delete-all-btn" onClick={() => setShowDeleteConfirm(true)}>
                     Delete Session
@@ -1101,14 +1110,6 @@ function App() {
             }
           }}>
             Copy Session ID
-          </div>
-          <div className="context-menu-item" onClick={() => {
-            if (contextMenuTab) {
-              setSelectedTabs(new Set([contextMenuTab]));
-              setShowContextMenu(false);
-            }
-          }}>
-            Start Merge Mode
           </div>
         </div>
       )}
