@@ -13,6 +13,7 @@
     "build:renderer": "node scripts/vite-build.mjs",
     "start": "electron .",
     "dist": "npm run build && electron-builder",
+    "dist:portable": "npm run build && electron-builder --win portable",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
@@ -40,12 +41,42 @@
   },
   "build": {
     "appId": "com.claudecode.todomonitor",
-    "productName": "Claude Todo Monitor",
+    "productName": "ClaudeToDo",
     "directories": {
-      "output": "release"
+      "output": "portable"
     },
     "files": [
       "dist/**/*"
-    ]
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "ClaudeToDo-Windows.exe"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "artifactName": "ClaudeToDo-macOS"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "ClaudeToDo-Linux.AppImage"
+    },
+    "portable": {
+      "artifactName": "ClaudeToDo-Windows.exe"
+    }
   }
 }
