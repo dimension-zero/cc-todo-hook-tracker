@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { Result, ResultUtils } from './Result.js';
+import { Result, ResultUtils } from './Result';
 
 export interface Todo {
   content: string;

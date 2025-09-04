@@ -60,11 +60,18 @@ body {
   border-bottom: 1px solid #35373b;
 }
 
+.sidebar-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
 .sidebar-header h2 {
   font-size: 16px;
   font-weight: 600;
   color: #ffffff;
-  margin-bottom: 8px;
+  margin: 0;
 }
 
 /* Sidebar controls */
@@ -247,6 +254,56 @@ body {
   color: #8e9297;
   font-weight: 400;
   font-size: 14px;
+}
+
+/* Activity toggle */
+.activity-toggle {
+  display: flex;
+  align-items: center;
+}
+
+.activity-toggle label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: 12px;
+  color: #8e9297;
+}
+
+.activity-toggle span {
+  margin-right: 6px;
+  font-weight: 500;
+}
+
+.activity-toggle input[type="checkbox"] {
+  width: 28px;
+  height: 16px;
+  appearance: none;
+  background: #35373b;
+  border-radius: 8px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.activity-toggle input[type="checkbox"]:checked {
+  background: #1264a3;
+}
+
+.activity-toggle input[type="checkbox"]::before {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: white;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.2s;
+}
+
+.activity-toggle input[type="checkbox"]:checked::before {
+  transform: translateX(12px);
 }
 
 .project-path {

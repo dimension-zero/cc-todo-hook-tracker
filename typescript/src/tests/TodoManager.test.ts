@@ -1,8 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { TodoManager, Todo } from '../utils/TodoManager.js';
-import { ResultUtils } from '../utils/Result.js';
+import { TodoManager, Todo } from '../utils/TodoManager';
+import { ResultUtils } from '../utils/Result';
 
 describe('TodoManager E2E Test Suite', () => {
   let testDir: string;

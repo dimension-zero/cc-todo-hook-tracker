@@ -95,14 +95,67 @@ function App() {
   // Resizable panes state
   const [leftPaneWidth, setLeftPaneWidth] = useState(260);
   const [isResizing, setIsResizing] = useState(false);
+  
+  // Activity mode state
+  const [activityMode, setActivityMode] = useState(false);
+  const [lastGlobalMostRecentTime, setLastGlobalMostRecentTime] = useState<Date | null>(null);
 
-  // Load todos data
+  // Function to find and select the globally most recent session
+  const selectMostRecentSession = (projects: Project[]) => {
+    let mostRecentProject: Project | null = null;
+    let mostRecentSession: Session | null = null;
+    let mostRecentDate: Date | null = null;
+    
+    // Find the absolutely most recent session across all projects
+    for (const project of projects) {
+      for (const session of project.sessions) {
+        const sessionDate = new Date(session.lastModified);
+        if (!mostRecentDate || sessionDate > mostRecentDate) {
+          mostRecentDate = sessionDate;
+          mostRecentProject = project;
+          mostRecentSession = session;
+        }
+      }
+    }
+    
+    // Select the most recent session found
+    if (mostRecentProject && mostRecentSession) {
+      setSelectedProject(mostRecentProject);
+      setSelectedSession(mostRecentSession);
+      
+      // If there are todos, select the first in-progress or pending one
+      const activeTodo = mostRecentSession.todos.findIndex(t => 
+        t.status === 'in_progress' || t.status === 'pending'
+      );
+      if (activeTodo >= 0) {
+        setSelectedIndices(new Set([activeTodo]));
+        setLastSelectedIndex(activeTodo);
+      } else {
+        // Clear selection if no active todos
+        setSelectedIndices(new Set());
+        setLastSelectedIndex(null);
+      }
+    }
+  };
+
+  // Load todos data with smart refresh strategy
   useEffect(() => {
     loadTodos();
-    // Refresh every 5 seconds
-    const interval = setInterval(loadTodos, 5000);
-    return () => clearInterval(interval);
-  }, []);
+    
+    // Smart refresh: Only poll when Activity mode is ON, and much less frequently
+    // Hook system provides immediate updates for current session,
+    // but polling catches updates from other sessions/instances
+    let interval: NodeJS.Timeout | null = null;
+    
+    if (activityMode) {
+      // Poll every 30 seconds when Activity mode is ON (much less aggressive)
+      interval = setInterval(loadTodos, 30000);
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [activityMode]); // Re-run when activityMode changes
 
   // Click outside handler for context menus
   useEffect(() => {
@@ -213,8 +266,50 @@ function App() {
       
       setProjects(deduplicatedData);
       
-      // If a project was selected, update it
-      if (selectedProject) {
+      // Activity mode: Auto-focus on the globally most recent session
+      if (activityMode) {
+        let globalMostRecentProject: Project | null = null;
+        let globalMostRecentSession: Session | null = null;
+        let globalMostRecentTime: Date | null = null;
+        
+        // Find the globally most recent session across all projects
+        for (const project of deduplicatedData) {
+          for (const session of project.sessions) {
+            const sessionTime = new Date(session.lastModified);
+            if (!globalMostRecentTime || sessionTime > globalMostRecentTime) {
+              globalMostRecentTime = sessionTime;
+              globalMostRecentProject = project;
+              globalMostRecentSession = session;
+            }
+          }
+        }
+        
+        // Auto-select if we found a more recent session than what we knew before
+        if (globalMostRecentProject && globalMostRecentSession && globalMostRecentTime) {
+          if (!lastGlobalMostRecentTime || globalMostRecentTime > lastGlobalMostRecentTime) {
+            setSelectedProject(globalMostRecentProject);
+            setSelectedSession(globalMostRecentSession);
+            
+            // If there are todos, select the first in-progress or pending one
+            const activeTodo = globalMostRecentSession.todos.findIndex(t => 
+              t.status === 'in_progress' || t.status === 'pending'
+            );
+            if (activeTodo >= 0) {
+              setSelectedIndices(new Set([activeTodo]));
+              setLastSelectedIndex(activeTodo);
+            } else {
+              setSelectedIndices(new Set());
+              setLastSelectedIndex(null);
+            }
+          }
+          
+          // Always update our knowledge of the global most recent time
+          setLastGlobalMostRecentTime(globalMostRecentTime);
+        }
+      }
+      
+      // Standard project selection update (when not in activity mode or no auto-focus occurred)
+      if (!activityMode && selectedProject) {
         const updated = deduplicatedData.find(p => p.path === selectedProject.path);
         if (updated) {
           setSelectedProject(updated);
@@ -322,8 +417,8 @@ function App() {
     setShowContextMenu(true);
   };
 
-  const [mergeSources, setMergeSources] = React.useState<Session[]>([]);
-  const [mergePreview, setMergePreview] = React.useState<{
+  const [mergeSources, setMergeSources] = useState<Session[]>([]);
+  const [mergePreview, setMergePreview] = useState<{
     totalTodos: number;
     duplicates: number;
     newTodos: number;
@@ -443,7 +538,9 @@ function App() {
           
           // Verify the merge makes sense
           if (mergedTodos.length !== beforeMerge.length + todosAdded) {
-            throw new Error(`Merge verification failed: expected ${beforeMerge.length + todosAdded} todos, got ${mergedTodos.length}`);
+            console.error(`Merge verification failed: expected ${beforeMerge.length + todosAdded} todos, got ${mergedTodos.length}`);
+            alert('Merge operation failed verification. Please try again.');
+            return;
           }
           
           // Save the updated todos to target
@@ -960,7 +1057,27 @@ function App() {
       {/* Sidebar with projects */}
       <div className="sidebar" style={{ width: leftPaneWidth }}>
         <div className="sidebar-header">
-          <h2>Projects ({sortedProjects.length})</h2>
+          <div className="sidebar-header-top">
+            <h2>Projects ({sortedProjects.length})</h2>
+            <div className="activity-toggle">
+              <label>
+                <span>Activity</span>
+                <input
+                  type="checkbox"
+                  checked={activityMode}
+                  onChange={(e) => {
+                    const newActivityMode = e.target.checked;
+                    setActivityMode(newActivityMode);
+                    
+                    // When Activity mode is turned ON, immediately find and select most recent session
+                    if (newActivityMode && projects.length > 0) {
+                      selectMostRecentSession(projects);
+                    }
+                  }}
+                />
+              </label>
+            </div>
+          </div>
           <div className="sidebar-controls">
             <div className="sort-controls">
               {[0, 1, 2].map(method => (
