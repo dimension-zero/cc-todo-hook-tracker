@@ -1051,7 +1051,9 @@ function App() {
               </div>
             </div>
             <div className="session-tabs">
-              {selectedProject.sessions.map((session) => {
+              {selectedProject.sessions
+                .sort((a, b) => b.lastModified.getTime() - a.lastModified.getTime())
+                .map((session) => {
                 const counts = getStatusCounts(session);
                 const isSelected = selectedSession?.id === session.id;
                 const isMultiSelected = selectedTabs.has(session.id);
