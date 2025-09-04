@@ -667,6 +667,54 @@ function App() {
     clearSelection();
   };
 
+  const handleDeleteEmptySessionsInProject = async () => {
+    if (!selectedProject) return;
+    
+    // Find all empty sessions in current project
+    const emptySessions = selectedProject.sessions.filter(s => s.todos.length === 0);
+    
+    if (emptySessions.length === 0) {
+      alert('No empty sessions found in this project.');
+      return;
+    }
+    
+    // Ask for confirmation
+    const confirmation = window.confirm(
+      `Found ${emptySessions.length} empty session${emptySessions.length > 1 ? 's' : ''} in "${
+        selectedProject.path.split(/[\\/]/).pop()
+      }".\n\nDelete ${emptySessions.length > 1 ? 'them' : 'it'}?`
+    );
+    
+    if (!confirmation) return;
+    
+    // Delete each empty session
+    let deletedCount = 0;
+    let failedCount = 0;
+    
+    for (const session of emptySessions) {
+      if (session.filePath) {
+        try {
+          await window.electronAPI.deleteTodoFile(session.filePath);
+          deletedCount++;
+          console.log(`Deleted empty session: ${session.id}`);
+        } catch (error) {
+          console.error(`Failed to delete session ${session.id}:`, error);
+          failedCount++;
+        }
+      }
+    }
+    
+    // Show result
+    if (failedCount > 0) {
+      alert(`Deleted ${deletedCount} empty session(s). Failed to delete ${failedCount} session(s).`);
+    } else if (deletedCount > 0) {
+      console.log(`Successfully deleted ${deletedCount} empty session(s)`);
+    }
+    
+    // Reload todos to reflect changes
+    await loadTodos();
+  };
+
   const handleDeleteSession = async () => {
     if (!selectedSession || !selectedSession.filePath) return;
     
@@ -1035,6 +1083,11 @@ function App() {
                 {selectedTabs.size >= 2 && (
                   <button className="merge-btn" onClick={startMerge}>
                     Merge {selectedTabs.size} Sessions
+                  </button>
+                )}
+                {selectedProject.sessions.some(s => s.todos.length === 0) && (
+                  <button className="delete-empty-btn" onClick={handleDeleteEmptySessionsInProject}>
+                    Delete Empty ({selectedProject.sessions.filter(s => s.todos.length === 0).length})
                   </button>
                 )}
                 {!showDeleteConfirm ? (
