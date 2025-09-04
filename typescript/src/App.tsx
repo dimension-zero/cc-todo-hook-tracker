@@ -964,18 +964,9 @@ function App() {
                   {todoCount === 0 && <span className="empty-badge"> (empty)</span>}
                 </div>
                 <div className="project-stats">
-                  {todoCount === 0 ? (
-                    'No todos • '
-                  ) : hasActiveTodos ? (
-                    `${todoCount} todos • `
-                  ) : (
-                    `${todoCount} completed • `
-                  )}
-                  {project.sessions.length} session{project.sessions.length !== 1 ? 's' : ''}
+                  {project.sessions.length} • {todoCount}
                   {project.mostRecentTodoDate && (
-                    <div className="project-date">
-                      {formatUKDate(project.mostRecentTodoDate)}
-                    </div>
+                    <> • {formatUKDate(project.mostRecentTodoDate)} {formatUKTime(project.mostRecentTodoDate)}</>
                   )}
                 </div>
               </div>
@@ -993,7 +984,12 @@ function App() {
         {selectedProject && (
           <>
             <div className="project-header">
-              <h1>{selectedProject.path}</h1>
+              <h1>
+                {selectedProject.path}
+                {selectedSession && (
+                  <span className="todo-count-badge"> ({displayTodos ? displayTodos.length : 0})</span>
+                )}
+              </h1>
             </div>
             <div className="control-bar">
               <div className="filter-controls">
@@ -1069,12 +1065,7 @@ function App() {
                     title={getSessionTooltip(session, selectedProject)}
                   >
                     <div className="session-info">
-                      <div className="session-id">{session.id.substring(0, 8)}</div>
-                      <div className="todo-count">
-                        <span className="pending">{counts.pending}p</span>
-                        <span className="in-progress">{counts.in_progress}i</span>
-                        <span className="completed">{counts.completed}c</span>
-                      </div>
+                      <div className="session-id">{session.id.substring(0, 6)}</div>
                       <div className="session-date">
                         {formatUKDate(session.lastModified)} {formatUKTime(session.lastModified)}
                       </div>
@@ -1096,7 +1087,7 @@ function App() {
                   // Only handle shift-click or ctrl/cmd-click for merge selection
                   // Ignore clicks on interactive elements
                   const target = e.target as HTMLElement;
-                  if (target.closest('.todo-item') || target.closest('.todos-header') || target.closest('.status-bar')) {
+                  if (target.closest('.todo-item') || target.closest('.edit-controls') || target.closest('.status-bar')) {
                     return;
                   }
                   
@@ -1110,7 +1101,7 @@ function App() {
                   // Right-click also selects for merge
                   // Ignore clicks on interactive elements
                   const target = e.target as HTMLElement;
-                  if (target.closest('.todo-item') || target.closest('.todos-header') || target.closest('.status-bar')) {
+                  if (target.closest('.todo-item') || target.closest('.edit-controls') || target.closest('.status-bar')) {
                     return;
                   }
                   
@@ -1121,15 +1112,12 @@ function App() {
                 title={`${selectedTabs.has(selectedSession.id) ? 'Selected for merge • ' : ''}Shift+Click or Right-Click to select for merge`}
               >
                 <div className="todos-container">
-                  <div className="todos-header">
-                    <h2>Todos ({displayTodos.length})</h2>
-                    {isDirty && (
-                      <div className="edit-controls">
-                        <button className="save-btn" onClick={handleSave}>Save</button>
-                        <button className="discard-btn" onClick={handleCancel}>Discard</button>
-                      </div>
-                    )}
-                  </div>
+                  {isDirty && (
+                    <div className="edit-controls">
+                      <button className="save-btn" onClick={handleSave}>Save</button>
+                      <button className="discard-btn" onClick={handleCancel}>Discard</button>
+                    </div>
+                  )}
                   <div className={`todos-list padding-${paddingMode === 0 ? 'normal' : paddingMode === 1 ? 'compact' : 'none'}`}>
                     {filteredTodos.map((todo, index) => {
                       const originalIndex = displayTodos.indexOf(todo);
