@@ -78,12 +78,12 @@ interface PathReconstructionResult {
 
 // Get real project path from metadata or session files
 async function getRealProjectPath(sessionId: string): Promise<PathReconstructionResult> {
-  console.log(`Looking for project path for session: ${sessionId}`);
+  // console.log(`Looking for project path for session: ${sessionId}`);
   
   try {
     // First, check if there's a metadata file in the project directory
     const projectDirs = await fs.readdir(projectsDir);
-    console.log(`Found ${projectDirs.length} project directories`);
+    // console.log(`Found ${projectDirs.length} project directories`);
     
     // Look for a project directory containing this session
     let matchedProjDir: string | null = null;
@@ -106,7 +106,7 @@ async function getRealProjectPath(sessionId: string): Promise<PathReconstruction
       };
     }
     
-    console.log(`Found session ${sessionId} in project dir: ${matchedProjDir}`);
+    // console.log(`Found session ${sessionId} in project dir: ${matchedProjDir}`);
     const projPath = path.join(projectsDir, matchedProjDir);
     const files = await fs.readdir(projPath);
     
@@ -145,7 +145,7 @@ async function getRealProjectPath(sessionId: string): Promise<PathReconstruction
     if (reconstructedPath && validatePath(reconstructedPath)) {
       return { path: reconstructedPath, flattenedDir: matchedProjDir };
     } else {
-      console.error(`Failed to reconstruct valid path from: ${matchedProjDir}`);
+      // console.error(`Failed to reconstruct valid path from: ${matchedProjDir}`);
       return {
         path: null,
         flattenedDir: matchedProjDir,
@@ -176,7 +176,7 @@ function listDirectory(dirPath: string): string[] {
   try {
     return fsSync.readdirSync(dirPath);
   } catch (error) {
-    console.log(`Error listing ${dirPath}: ${error}`);
+    // console.log(`Error listing ${dirPath}: ${error}`);
     return [];
   }
 }
@@ -187,19 +187,19 @@ function buildAndValidatePath(flatParts: string[], isWindows: boolean): string |
   let currentPath = isWindows ? `${flatParts[0]}:\\` : '/';
   let consumedParts = isWindows ? 1 : 0;
   
-  console.log(`Starting path reconstruction with parts: [${flatParts.join(', ')}]`);
+  // console.log(`Starting path reconstruction with parts: [${flatParts.join(', ')}]`);
   
   while (consumedParts < flatParts.length) {
     const remainingParts = flatParts.slice(consumedParts);
-    console.log(`Current path: ${currentPath}`);
-    console.log(`Remaining parts: [${remainingParts.join(', ')}]`);
+    // console.log(`Current path: ${currentPath}`);
+    // console.log(`Remaining parts: [${remainingParts.join(', ')}]`);
     
     // List what's actually in the current directory
     const dirContents = listDirectory(currentPath);
-    console.log(`Directory contents: [${dirContents.slice(0, 10).join(', ')}${dirContents.length > 10 ? '...' : ''}]`);
+    // console.log(`Directory contents: [${dirContents.slice(0, 10).join(', ')}${dirContents.length > 10 ? '...' : ''}]`);
     
     if (dirContents.length === 0) {
-      console.log(`Cannot list directory ${currentPath}, stopping`);
+      // console.log(`Cannot list directory ${currentPath}, stopping`);
       break;
     }
     
@@ -231,7 +231,7 @@ function buildAndValidatePath(flatParts: string[], isWindows: boolean): string |
       for (const candidate of candidates) {
         // Look for exact match
         if (dirContents.includes(candidate)) {
-          console.log(`Found exact match: "${candidate}" (consuming ${numParts} parts)`);
+          // console.log(`Found exact match: "${candidate}" (consuming ${numParts} parts)`);
           bestMatch = candidate;
           bestMatchLength = numParts;
           break;
@@ -241,7 +241,7 @@ function buildAndValidatePath(flatParts: string[], isWindows: boolean): string |
         // This handles cases where the flattened name is abbreviated
         for (const dirEntry of dirContents) {
           if (dirEntry.toLowerCase().startsWith(candidate.toLowerCase())) {
-            console.log(`Found prefix match: "${dirEntry}" starts with "${candidate}" (consuming ${numParts} parts)`);
+            // console.log(`Found prefix match: "${dirEntry}" starts with "${candidate}" (consuming ${numParts} parts)`);
             bestMatch = dirEntry;
             bestMatchLength = numParts;
             break;
@@ -258,13 +258,13 @@ function buildAndValidatePath(flatParts: string[], isWindows: boolean): string |
       // Found a match, add it to the path
       currentPath = currentPath + bestMatch;
       consumedParts += bestMatchLength;
-      console.log(`✓ Added "${bestMatch}" to path, new path: ${currentPath}`);
+      // console.log(`✓ Added "${bestMatch}" to path, new path: ${currentPath}`);
     } else {
       // No match found, try adding the part as-is (might be a new directory)
       const part = remainingParts[0];
       currentPath = currentPath + part;
       consumedParts += 1;
-      console.log(`✗ No match found for "${part}", adding as-is`);
+      // console.log(`✗ No match found for "${part}", adding as-is`);
     }
     
     // Add path separator for next iteration unless we're done
@@ -273,7 +273,7 @@ function buildAndValidatePath(flatParts: string[], isWindows: boolean): string |
     }
   }
   
-  console.log(`Final reconstructed path: ${currentPath}`);
+  // console.log(`Final reconstructed path: ${currentPath}`);
   return currentPath;
 }
 
@@ -282,9 +282,9 @@ function guessPathFromFlattenedName(flatPath: string): string {
   const isWindows = process.platform === 'win32';
   const pathSep = isWindows ? '\\' : '/';
   
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(`Reconstructing path from: ${flatPath}`);
-  console.log('='.repeat(60));
+  // console.log(`\n${'='.repeat(60)}`);
+  // console.log(`Reconstructing path from: ${flatPath}`);
+  // console.log('='.repeat(60));
   
   // First check if we have metadata for this project
   try {
@@ -293,7 +293,7 @@ function guessPathFromFlattenedName(flatPath: string): string {
       const metadata = require('fs').readFileSync(metadataPath, 'utf-8');
       const data = JSON.parse(metadata);
       if (data.path) {
-        console.log(`✓ Found cached metadata: ${data.path}`);
+        // console.log(`✓ Found cached metadata: ${data.path}`);
         return data.path;
       }
     }
@@ -306,8 +306,8 @@ function guessPathFromFlattenedName(flatPath: string): string {
   if (windowsMatch) {
     const [, driveLetter, restOfPath] = windowsMatch;
     
-    console.log(`Drive letter: ${driveLetter}`);
-    console.log(`Rest of path: ${restOfPath}`);
+    // console.log(`Drive letter: ${driveLetter}`);
+    // console.log(`Rest of path: ${restOfPath}`);
     
     // Split on single dashes, but preserve empty parts (which indicate dots)
     const rawParts = restOfPath.split('-');
@@ -324,17 +324,17 @@ function guessPathFromFlattenedName(flatPath: string): string {
       }
     }
     
-    console.log(`Flattened parts: [${flatParts.join(', ')}]`);
+    // console.log(`Flattened parts: [${flatParts.join(', ')}]`);
     
     // Build path with greedy filesystem validation
     const allParts = [driveLetter, ...flatParts];
     const validatedPath = buildAndValidatePath(allParts, true);
     
     if (validatedPath && validatePath(validatedPath)) {
-      console.log(`✓ Successfully validated: ${validatedPath}`);
+      // console.log(`✓ Successfully validated: ${validatedPath}`);
       return validatedPath;
     } else {
-      console.log(`✗ Could not validate path, returning best guess: ${validatedPath || flatPath}`);
+      // console.log(`✗ Could not validate path, returning best guess: ${validatedPath || flatPath}`);
       return validatedPath || flatPath;
     }
   }
@@ -347,7 +347,7 @@ function guessPathFromFlattenedName(flatPath: string): string {
   }
   
   // Return as-is if we can't figure it out
-  console.log(`✗ Unknown path format: ${flatPath}`);
+  // console.log(`✗ Unknown path format: ${flatPath}`);
   return flatPath;
 }
 
@@ -431,7 +431,7 @@ async function loadTodosData(): Promise<Project[]> {
                 const match = line.match(/"project_path"\s*:\s*"([^"]+)"|"projectPath"\s*:\s*"([^"]+)"/);
                 if (match) {
                   projectPath = match[1] || match[2];
-                  console.log(`Found project path in todo file: ${projectPath}`);
+                  // console.log(`Found project path in todo file: ${projectPath}`);
                   break;
                 }
               }
@@ -511,10 +511,10 @@ async function loadTodosData(): Promise<Project[]> {
         if (!projectPath) {
           const cwd = process.cwd();
           projectPath = cwd;
-          console.log('Using current working directory:', projectPath);
+          // console.log('Using current working directory:', projectPath);
         }
         
-        console.log(`Current session project path: ${projectPath}`);
+        // console.log(`Current session project path: ${projectPath}`);
         
         if (!projects.has(projectPath)) {
           projects.set(projectPath, {
@@ -555,7 +555,7 @@ async function loadTodosData(): Promise<Project[]> {
     logEntries.push(`Failed reconstructions: ${logEntries.filter(l => l.includes('✗ FAILED')).length}`);
     
     await fs.writeFile(logPath, logEntries.join('\n'), 'utf-8');
-    console.log(`Project load log written to: ${logPath}`);
+    // console.log(`Project load log written to: ${logPath}`);
   } catch (error) {
     console.error('Failed to write project load log:', error);
   }
