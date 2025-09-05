@@ -1,5 +1,5 @@
 import electron from 'electron';
-const { app, BrowserWindow, ipcMain } = electron;
+const { app, BrowserWindow, ipcMain, Menu, shell, dialog } = electron;
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
@@ -567,6 +567,166 @@ async function loadTodosData(): Promise<Project[]> {
   return Array.from(projects.values());
 }
 
+function showHelp() {
+  const helpContent = `
+ClaudeToDo Help
+
+WHAT THIS DOES
+Monitor todo lists from Claude Code sessions. View todos by project. Track progress.
+
+INTERFACE
+• Left pane: Projects (folders where you used Claude Code)
+• Right pane: Sessions (Claude conversations) and their todos
+• Status icons: ● pending, ◐ in progress, ● completed
+
+NAVIGATION  
+• Click projects to switch between them
+• Click sessions to view their todos
+• Most recent project/session loads automatically
+
+CONTROLS
+• Edit todos: Double-click any todo text
+• Move todos: Drag and drop to reorder
+• Select multiple: Ctrl/Cmd+click, Shift+click for ranges
+• Delete todos: Select and press Delete key
+• Keyboard shortcuts work as expected
+
+SORTING & FILTERING
+• Sort projects: Alphabetical, by recent activity, by todo count
+• Filter todos: Show all, pending only, or active only
+• Adjust spacing: Normal, compact, or minimal padding
+
+SESSION MANAGEMENT
+• Merge sessions: Ctrl/Cmd+click multiple tabs, right-click → Merge
+• Delete sessions: Right-click tab → Delete
+• Failed reconstructions show when session files can't be found
+
+ACTIVITY MODE
+• Toggle Activity Mode button for live updates
+• Auto-focuses newest session changes
+• Polls for updates when enabled
+
+TECHNICAL
+• Data source: ~/.claude/todos/ folder (Claude Code session files)
+• Project mapping: Attempts to match sessions to project directories
+• File operations: Read-only monitoring, safe to delete files externally
+
+That's it. No features you don't need.`;
+
+  dialog.showMessageBox(mainWindow!, {
+    type: 'info',
+    title: 'ClaudeToDo Help',
+    message: 'ClaudeToDo Help',
+    detail: helpContent,
+    buttons: ['Close'],
+    defaultId: 0
+  });
+}
+
+function setupMenu() {
+  const isMac = process.platform === 'darwin';
+  
+  const template: Electron.MenuItemConstructorOptions[] = [
+    // macOS app menu
+    ...(isMac ? [{
+      label: app.getName(),
+      submenu: [
+        { role: 'about' as const },
+        { type: 'separator' as const },
+        { role: 'hide' as const },
+        { role: 'hideOthers' as const },
+        { role: 'unhide' as const },
+        { type: 'separator' as const },
+        { role: 'quit' as const }
+      ]
+    }] : []),
+    
+    // File menu (minimal)
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'Refresh Projects',
+          accelerator: 'CmdOrCtrl+R',
+          click: () => {
+            mainWindow?.webContents.reload();
+          }
+        },
+        { type: 'separator' as const },
+        isMac ? { role: 'close' as const } : { role: 'quit' as const }
+      ]
+    },
+    
+    // Edit menu (essential only)
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' as const },
+        { role: 'redo' as const },
+        { type: 'separator' as const },
+        { role: 'cut' as const },
+        { role: 'copy' as const },
+        { role: 'paste' as const },
+        { role: 'selectAll' as const }
+      ]
+    },
+    
+    // View menu
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' as const },
+        { role: 'forceReload' as const },
+        { role: 'toggleDevTools' as const },
+        { type: 'separator' as const },
+        { role: 'resetZoom' as const },
+        { role: 'zoomIn' as const },
+        { role: 'zoomOut' as const },
+        { type: 'separator' as const },
+        { role: 'togglefullscreen' as const }
+      ]
+    },
+    
+    // Window menu
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' as const },
+        ...(isMac ? [
+          { type: 'separator' as const },
+          { role: 'front' as const },
+          { type: 'separator' as const },
+          { role: 'window' as const }
+        ] : [
+          { role: 'close' as const }
+        ])
+      ]
+    },
+    
+    // Help menu
+    {
+      role: 'help',
+      submenu: [
+        {
+          label: 'ClaudeToDo Help',
+          accelerator: 'F1',
+          click: showHelp
+        },
+        { type: 'separator' as const },
+        {
+          label: 'Claude Code',
+          click: () => {
+            shell.openExternal('https://claude.ai/code');
+          }
+        }
+      ]
+    }
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -593,6 +753,9 @@ function createWindow() {
   mainWindow!.on('closed', () => {
     mainWindow = null;
   });
+  
+  // Set up streamlined application menu
+  setupMenu();
 }
 
 app.whenReady().then(() => {
