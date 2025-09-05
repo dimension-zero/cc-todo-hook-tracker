@@ -1,0 +1,39 @@
+# Ignore local .claude directory
+.claude/
+
+# Test output files
+*.log
+*.tmp
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# PowerShell specific
+*.ps1.bak
+powershell/logs/*.log
+powershell/logs/*.json
+
+# TypeScript
+typescript/dist/
+typescript/release/
+typescript/node_modules/
+
+# Git hooks with sensitive patterns - DO NOT COMMIT
+hooks/
+
+# Test files
+test.txt
+test2.txt
+*.test
+
+# Screenshots  
+screenshot*.png
