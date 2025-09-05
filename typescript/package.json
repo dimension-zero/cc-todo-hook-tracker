@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Slack-like Electron app for Claude Code Todo monitoring",
   "type": "module",
-  "main": "dist/main/main.js",
+  "main": "dist/main/main.cjs",
   "scripts": {
     "dev": "concurrently \"npm run dev:main\" \"npm run dev:renderer\"",
     "dev:main": "tsc -p tsconfig.main.json --watch",

@@ -244,7 +244,7 @@ function App() {
     try {
       const data = await window.electronAPI.getTodos();
       
-      // Deduplicate sessions within each project
+      // Deduplicate sessions within each project  
       const deduplicatedData = data.map(project => ({
         ...project,
         sessions: project.sessions.reduce((unique: Session[], session) => {

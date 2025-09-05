@@ -1,15 +1,12 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
-import path from 'node:path';
-import fs from 'node:fs/promises';
-import fsSync from 'node:fs';
-import os from 'node:os';
-import { fileURLToPath } from 'node:url';
-import { dirname } from 'node:path';
+const { app, BrowserWindow, ipcMain } = require('electron');
+const path = require('node:path');
+const fs = require('node:fs/promises');
+const fsSync = require('node:fs');
+const os = require('node:os');
+import type { BrowserWindow as BrowserWindowType } from 'electron';
+// CommonJS __dirname is available by default
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-let mainWindow: BrowserWindow | null = null;
+let mainWindow: BrowserWindowType | null = null;
 
 // Paths to Claude directories
 const claudeDir = path.join(os.homedir(), '.claude');
@@ -57,7 +54,7 @@ async function findProjectForSession(sessionId: string): Promise<string | null> 
       const projPath = path.join(projectsDir, projDir);
       const files = await fs.readdir(projPath);
       
-      if (files.some(f => f.startsWith(sessionId))) {
+      if (files.some((f: string) => f.startsWith(sessionId))) {
         return convertFlattenedPath(projDir);
       }
     }
@@ -92,7 +89,7 @@ async function getRealProjectPath(sessionId: string): Promise<PathReconstruction
       const files = await fs.readdir(projPath);
       
       // Check if this project contains our session
-      if (files.some(f => f.startsWith(sessionId))) {
+      if (files.some((f: string) => f.startsWith(sessionId))) {
         matchedProjDir = projDir;
         break;
       }
@@ -579,14 +576,14 @@ function createWindow() {
 
   // In development, load from Vite dev server
   if (process.env.NODE_ENV === 'development') {
-    mainWindow.loadURL('http://localhost:5173');
-    mainWindow.webContents.openDevTools();
+    mainWindow!.loadURL('http://localhost:5173');
+    mainWindow!.webContents.openDevTools();
   } else {
     // In production, load the built files
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+    mainWindow!.loadFile(path.join(__dirname, '../renderer/index.html'));
   }
 
-  mainWindow.on('closed', () => {
+  mainWindow!.on('closed', () => {
     mainWindow = null;
   });
 }
@@ -598,9 +595,9 @@ app.whenReady().then(() => {
   });
   
   // Handle save todos request using TodoManager
-  ipcMain.handle('save-todos', async (event, filePath: string, todos: Todo[]) => {
-    const { TodoManager } = await import('../utils/TodoManager.js');
-    const { ResultUtils } = await import('../utils/Result.js');
+  ipcMain.handle('save-todos', async (event: any, filePath: string, todos: Todo[]) => {
+    const { TodoManager } = require('../utils/TodoManager');
+    const { ResultUtils } = require('../utils/Result');
     
     const manager = new TodoManager(filePath);
     const result = await manager.writeTodos(todos);
@@ -614,9 +611,9 @@ app.whenReady().then(() => {
   });
   
   // Handle delete todo file request using TodoManager
-  ipcMain.handle('delete-todo-file', async (event, filePath: string) => {
-    const { TodoManager } = await import('../utils/TodoManager.js');
-    const { ResultUtils } = await import('../utils/Result.js');
+  ipcMain.handle('delete-todo-file', async (event: any, filePath: string) => {
+    const { TodoManager } = require('../utils/TodoManager');
+    const { ResultUtils } = require('../utils/Result');
     
     const manager = new TodoManager(filePath);
     const result = await manager.deleteFile();
