@@ -1,10 +1,17 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
-const path = require('node:path');
-const fs = require('node:fs/promises');
-const fsSync = require('node:fs');
-const os = require('node:os');
+import electron from 'electron';
+const { app, BrowserWindow, ipcMain } = electron;
+import path from 'node:path';
+import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
+import os from 'node:os';
+import { fileURLToPath } from 'node:url';
+
+// ES module equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import type { BrowserWindow as BrowserWindowType } from 'electron';
-// CommonJS __dirname is available by default
+import { TodoManager } from '../utils/TodoManager.js';
+import { ResultUtils } from '../utils/Result.js';
 
 let mainWindow: BrowserWindowType | null = null;
 
@@ -286,8 +293,8 @@ function guessPathFromFlattenedName(flatPath: string): string {
   // First check if we have metadata for this project
   try {
     const metadataPath = path.join(projectsDir, flatPath, 'metadata.json');
-    if (require('fs').existsSync(metadataPath)) {
-      const metadata = require('fs').readFileSync(metadataPath, 'utf-8');
+    if (fsSync.existsSync(metadataPath)) {
+      const metadata = fsSync.readFileSync(metadataPath, 'utf-8');
       const data = JSON.parse(metadata);
       if (data.path) {
         // console.log(`✓ Found cached metadata: ${data.path}`);
@@ -591,13 +598,15 @@ function createWindow() {
 app.whenReady().then(() => {
   // Handle IPC requests for todos data
   ipcMain.handle('get-todos', async () => {
-    return await loadTodosData();
+    console.log('[IPC] get-todos called');
+    const result = await loadTodosData();
+    console.log('[IPC] Returning', result.length, 'projects');
+    return result;
   });
   
   // Handle save todos request using TodoManager
   ipcMain.handle('save-todos', async (event: any, filePath: string, todos: Todo[]) => {
-    const { TodoManager } = require('../utils/TodoManager');
-    const { ResultUtils } = require('../utils/Result');
+    // Using imported TodoManager and ResultUtils
     
     const manager = new TodoManager(filePath);
     const result = await manager.writeTodos(todos);
@@ -612,8 +621,7 @@ app.whenReady().then(() => {
   
   // Handle delete todo file request using TodoManager
   ipcMain.handle('delete-todo-file', async (event: any, filePath: string) => {
-    const { TodoManager } = require('../utils/TodoManager');
-    const { ResultUtils } = require('../utils/Result');
+    // Using imported TodoManager and ResultUtils
     
     const manager = new TodoManager(filePath);
     const result = await manager.deleteFile();

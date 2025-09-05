@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
+import ClaudeLogo from '../assets/ClaudeLogo.png';
 
 interface Todo {
   content: string;
@@ -305,6 +306,40 @@ function App() {
           
           // Always update our knowledge of the global most recent time
           setLastGlobalMostRecentTime(globalMostRecentTime);
+        }
+      }
+      
+      // Auto-select most recent project and session on initial load
+      if (!selectedProject && deduplicatedData.length > 0) {
+        let mostRecentProject: Project | null = null;
+        let mostRecentSession: Session | null = null;
+        let mostRecentDate: Date | null = null;
+        
+        // Find the project with the most recently modified session
+        for (const project of deduplicatedData) {
+          for (const session of project.sessions) {
+            const sessionDate = new Date(session.lastModified);
+            if (!mostRecentDate || sessionDate > mostRecentDate) {
+              mostRecentDate = sessionDate;
+              mostRecentProject = project;
+              mostRecentSession = session;
+            }
+          }
+        }
+        
+        // Select the most recent project and session found
+        if (mostRecentProject && mostRecentSession) {
+          setSelectedProject(mostRecentProject);
+          setSelectedSession(mostRecentSession);
+          
+          // If there are todos, select the first in-progress or pending one
+          const activeTodo = mostRecentSession.todos.findIndex(t => 
+            t.status === 'in_progress' || t.status === 'pending'
+          );
+          if (activeTodo >= 0) {
+            setSelectedIndices(new Set([activeTodo]));
+            setLastSelectedIndex(activeTodo);
+          }
         }
       }
       
@@ -1049,7 +1084,14 @@ function App() {
   };
 
   if (loading) {
-    return <div className="loading">Loading...</div>;
+    return (
+      <div className="splash-screen">
+        <div className="splash-logo">
+          <img src={ClaudeLogo} alt="Claude" className="claude-logo" />
+        </div>
+        <div className="splash-text">Loading projects...</div>
+      </div>
+    );
   }
 
   return (
@@ -1145,7 +1187,7 @@ function App() {
         onMouseDown={() => setIsResizing(true)}
       />
       
-      <div className="main-content">
+      <div className="main-content" style={{'--claude-logo': `url(${ClaudeLogo})`} as React.CSSProperties}>
         {selectedProject && (
           <>
             <div className="project-header">

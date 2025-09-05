@@ -22,27 +22,55 @@ body {
   position: relative;
 }
 
-/* Loading state */
-.loading {
+/* Splash screen */
+.splash-screen {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100vh;
   background: #1a1d21;
+  gap: 24px;
 }
 
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #3f4145;
-  border-top-color: #1264a3;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
+.splash-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.claude-logo {
+  width: 120px;
+  height: 120px;
+  animation: claudeSplashAnimation 2s ease-in-out infinite;
+  filter: drop-shadow(0 0 20px rgba(212, 127, 96, 0.3));
+}
+
+.splash-text {
+  font-size: 16px;
+  color: #d1d2d3;
+  opacity: 0.8;
+  animation: fadeInOut 2s ease-in-out infinite;
+}
+
+@keyframes claudeSplashAnimation {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInOut {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 /* Sidebar */
@@ -234,6 +262,36 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
+}
+
+.main-content::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 200px;
+  height: 200px;
+  background-image: var(--claude-logo);
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.03;
+  pointer-events: none;
+  z-index: 0;
+  animation: claudeThrobGentle 4s ease-in-out infinite;
+}
+
+@keyframes claudeThrobGentle {
+  0%, 100% {
+    opacity: 0.03;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 0.05;
+    transform: translate(-50%, -50%) scale(1.02);
+  }
 }
 
 /* Project header */
@@ -241,6 +299,8 @@ body {
   padding: 6px 20px;
   border-bottom: 1px solid #35373b;
   background: #222529;
+  position: relative;
+  z-index: 1;
 }
 
 .project-header h1 {
@@ -1210,8 +1270,9 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
   position: relative;
+  z-index: 1;
+  overflow: hidden;
   cursor: pointer;
   transition: all 0.2s;
 }
