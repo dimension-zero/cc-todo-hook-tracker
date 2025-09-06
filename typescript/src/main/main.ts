@@ -731,12 +731,14 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    title: 'ClaudeToDo - Session Monitor',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     },
-    titleBarStyle: 'hiddenInset',
+    // Remove hiddenInset to show normal title bar
+    // titleBarStyle: 'hiddenInset',
     backgroundColor: '#1a1d21',
     icon: path.join(__dirname, '../../assets/icon.png')
   });

@@ -105,8 +105,9 @@ body {
 /* Sidebar controls */
 .sidebar-controls {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
 }
 
 .project-count {
@@ -121,9 +122,12 @@ body {
 /* Sort controls */
 .sort-controls {
   display: flex;
-  gap: 8px;
+  gap: 0;
   flex-wrap: nowrap;
   min-width: 0;
+  border: 1px solid #35373b;
+  border-radius: 4px;
+  overflow: hidden;
 }
 
 .sort-title {
@@ -1123,18 +1127,23 @@ body {
 
 .sort-button {
   padding: 4px 8px;
-  margin: 0 2px;
-  background: #2f3136;
+  margin: 0;
+  background: transparent;
   border: none;
-  border-radius: 4px;
+  border-right: 1px solid #35373b;
+  border-radius: 0;
   color: #b9bbbe;
   cursor: pointer;
   font-size: 14px;
   transition: all 0.2s;
 }
 
+.sort-button:last-child {
+  border-right: none;
+}
+
 .sort-button:hover {
-  background: #35373b;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .sort-button.active {
@@ -1142,27 +1151,40 @@ body {
   color: white;
 }
 
-/* Show empty toggle */
-.show-empty-toggle {
+/* Filter toggles */
+.filter-toggles {
   display: flex;
-  align-items: center;
-}
-
-.show-empty-toggle label {
-  display: flex;
-  align-items: center;
   gap: 6px;
-  cursor: pointer;
-  font-size: 12px;
+}
+
+.filter-toggle {
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 500;
   color: #8e9297;
-}
-
-.show-empty-toggle input[type="checkbox"] {
+  background: transparent;
+  border: 1px solid #35373b;
+  border-radius: 4px;
   cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.show-empty-toggle span {
-  white-space: nowrap;
+.filter-toggle:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: #484a4f;
+}
+
+.filter-toggle.active {
+  background: #1264a3;
+  color: white;
+  border-color: #1264a3;
+}
+
+.filter-toggle.active:hover {
+  background: #0e5490;
+  border-color: #0e5490;
 }
 
 /* Session tabs */
