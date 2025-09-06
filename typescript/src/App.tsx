@@ -1101,7 +1101,7 @@ function App() {
         <div className="sidebar-header">
           <div className="sidebar-header-top">
             <h2>Projects ({sortedProjects.length})</h2>
-            <div className="activity-toggle">
+            <div className="activity-toggle" title="Auto-select the most recent session when navigating projects">
               <label>
                 <span>Activity</span>
                 <input
@@ -1127,31 +1127,27 @@ function App() {
                   key={method}
                   className={`sort-button ${sortMethod === method ? 'active' : ''}`}
                   onClick={() => setSortMethod(method as SortMethod)}
-                  title={method === 0 ? 'Sort alphabetically' : method === 1 ? 'Sort by recent' : 'Sort by todo count'}
+                  title={method === 0 ? 'Sort projects alphabetically by name' : method === 1 ? 'Sort projects by most recent activity' : 'Sort projects by number of todos'}
                 >
                   {getSortSymbol(method)}
                 </button>
               ))}
             </div>
-            <div className="show-empty-toggle">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={showEmptyProjects}
-                  onChange={(e) => setShowEmptyProjects(e.target.checked)}
-                />
-                <span>Show empty</span>
-              </label>
-            </div>
-            <div className="show-empty-toggle">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={showFailedReconstructions}
-                  onChange={(e) => setShowFailedReconstructions(e.target.checked)}
-                />
-                <span>Show failed paths</span>
-              </label>
+            <div className="filter-toggles">
+              <button
+                className={`filter-toggle ${showEmptyProjects ? 'active' : ''}`}
+                onClick={() => setShowEmptyProjects(!showEmptyProjects)}
+                title="Show/hide projects with no todos"
+              >
+                Empty
+              </button>
+              <button
+                className={`filter-toggle ${showFailedReconstructions ? 'active' : ''}`}
+                onClick={() => setShowFailedReconstructions(!showFailedReconstructions)}
+                title="Show/hide projects with invalid file paths"
+              >
+                Failed
+              </button>
             </div>
           </div>
         </div>
