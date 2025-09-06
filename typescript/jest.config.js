@@ -8,6 +8,7 @@ export default {
   },
   moduleNameMapper: {
     '\\.(css|less|scss|sass)$': '<rootDir>/src/tests/__mocks__/styleMock.js',
+    '\\.(jpg|jpeg|png|gif|webp|svg)$': '<rootDir>/src/tests/__mocks__/styleMock.js',
   },
   collectCoverageFrom: [
     'src/**/*.(ts|tsx)',

@@ -1,5 +1,3 @@
-// Shared type definitions for the application
-
 export interface Todo {
   content: string;
   status: 'pending' | 'in_progress' | 'completed';
@@ -10,32 +8,32 @@ export interface Todo {
 
 export interface Session {
   id: string;
-  name: string;
   todos: Todo[];
   lastModified: Date;
-  metadata?: {
-    projectName?: string;
-    projectPath?: string;
-    timestamp?: string;
-  };
+  created?: Date;
+  filePath?: string;
 }
 
 export interface Project {
-  name: string;
   path: string;
   sessions: Session[];
-  // For merge feature  
-  tempSessions?: Session[];
+  mostRecentTodoDate?: Date;
 }
 
-export interface TodoData {
-  projects: Project[];
+export type SortMethod = 0 | 1 | 2; // 0=alphabetic, 1=recent, 2=todos
+export type SpacingMode = 'wide' | 'normal' | 'compact';
+export type FilterState = {
+  completed: boolean;
+  in_progress: boolean;
+  pending: boolean;
+};
+
+declare global {
+  interface Window {
+    electronAPI: {
+      getTodos: () => Promise<Project[]>;
+      saveTodos: (filePath: string, todos: Todo[]) => Promise<boolean>;
+      deleteTodoFile: (filePath: string) => Promise<boolean>;
+    };
+  }
 }
-
-// Sort methods for projects
-export type SortMethod = 'time' | 'project';
-
-// For result pattern
-export type Result<T> = 
-  | { success: true; value: T }
-  | { success: false; error: string };
